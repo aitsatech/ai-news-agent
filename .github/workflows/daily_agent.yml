@@ -56,10 +56,8 @@ jobs:
         env:
           JEKYLL_ENV: production
 
-      # --- TEST STEP BYPASSED ---
-      # We are skipping html-proofer because it is incorrectly flagging
-      # dynamic Chirpy category links as broken.
-      # ---------------------------
+      # --- TEST STEP DELETED ---
+      # Removing html-proofer to bypass false-positive internal link errors.
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3

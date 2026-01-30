@@ -1,0 +1,56 @@
+name: Daily AI Agent Blog
+on:
+  schedule:
+    - cron: '0 9 * * *' # Runs every day at 9 AM
+  workflow_dispatch:   # Allows you to run it manually
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+jobs:
+  run-agent-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python_version: '3.10'
+
+      - name: Install Dependencies
+        run: |
+          pip install --upgrade pip
+          pip install langchain langchain-community langchain-groq langgraph duckduckgo-search ddgs pydantic requests
+
+      - name: Run Agent Task Force
+        env:
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+        run: python agent.py
+
+      - name: Commit Article
+        run: |
+          git config --global user.name "AI Editor"
+          git config --global user.email "editor@ai-news.bot"
+          git add .
+          git commit -m "New Article: $(date)" || echo "No changes to commit"
+          git push
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+
+      - name: Build with Jekyll
+        uses: actions/jekyll-build-pages@v1
+        with:
+          source: ./
+          destination: ./_site
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

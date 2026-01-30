@@ -16,7 +16,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0 # Chirpy needs this for "Last Modified" dates
+          fetch-depth: 0 
 
       - name: Set up Python
         uses: actions/setup-python@v4
@@ -41,22 +41,29 @@ jobs:
           git commit -m "New Article: $(date)" || echo "No changes to commit"
           git push
 
-      # --- NEW: SETUP RUBY FOR CHIRPY ---
       - name: Setup Ruby
         uses: ruby/setup-ruby@v1
         with:
           ruby-version: '3.3' 
-          bundler-cache: true # This automatically runs 'bundle install'
+          bundler-cache: true 
 
       - name: Setup Pages
         uses: actions/configure-pages@v4
 
-      # --- UPDATED: BUILD STEP ---
       - name: Build with Jekyll
         run: |
           bundle exec jekyll build --destination ./_site
         env:
           JEKYLL_ENV: production
+
+      # --- UPDATED: TEST STEP TO IGNORE CATEGORY ERRORS ---
+      - name: Test Site
+        run: |
+          bundle exec htmlproofer _site \
+            --disable-external \
+            --ignore-urls "/\/categories\/.*/,/\/tags\/.*/" \
+            --allow-hash-href \
+            --ignore-empty-alt
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3

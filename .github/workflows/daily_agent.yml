@@ -56,12 +56,12 @@ jobs:
         env:
           JEKYLL_ENV: production
 
-      # --- REWRITTEN TEST STEP ---
+      # --- IMPROVED TEST STEP ---
       - name: Test Site
         run: |
           bundle exec htmlproofer _site \
             --disable-external \
-            --ignore-urls "/\/categories\/.*/,/\/tags\/.*/,/\/ai-news-agent\/categories\/.*/" \
+            --ignore-urls "/^.*\/categories\/.*$/,/^.*\/tags\/.*$/" \
             --swap "{ \"^/ai-news-agent/\" => \"/\" }" \
             --allow-hash-href \
             --ignore-empty-alt

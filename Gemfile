@@ -2,19 +2,18 @@
 
 source "https://rubygems.org"
 
-# Force a stable version to bypass the 'MockGemspec' bug
 gem "jekyll", "4.3.4"
 
+# This ensures the theme is installed locally on the server
+gem "jekyll-theme-chirpy", "7.1.1"
+
 group :jekyll_plugins do
-  gem "jekyll-remote-theme"
-  gem "jekyll-include-cache"
   gem "jekyll-feed"
   gem "jekyll-seo-tag"
   gem "jekyll-sitemap"
   gem "jekyll-paginate"
+  gem "jekyll-include-cache"
 end
-
-gem "jekyll-theme-chirpy", "~> 7.1"
 
 # Testing and local development tools
 gem "html-proofer", "~> 5.0", group: :test

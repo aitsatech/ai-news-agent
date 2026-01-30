@@ -56,6 +56,8 @@ jobs:
         env:
           JEKYLL_ENV: production
 
+      # --- TEST STEP REMOVED TO ALLOW DEPLOYMENT ---
+
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:

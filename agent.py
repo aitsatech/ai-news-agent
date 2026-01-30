@@ -5,6 +5,15 @@ from typing import TypedDict, List
 from langgraph.graph import StateGraph, END
 from langchain_groq import ChatGroq
 from langchain_community.tools import DuckDuckGoSearchRun
+from datetime import datetime
+    today = datetime.now().strftime("%Y-%m-%d")
+    filename = f"_posts/{today}-{state['topic'].replace(' ', '-').lower()}.md"
+    # Ensure the _posts directory exists
+    os.makedirs("_posts", exist_ok=True)
+    with open(filename, "w") as f:
+        # Chirpy also requires "Front Matter" at the top of every post
+        f.write(f"---\ntitle: {state['topic']}\ndate: {today} 12:00:00 +0000\ncategories: [AI, News]\n---\n")
+        f.write(final_state['content'])
 
 # 1. Define the Shared State (The Agent's "Brain")
 class AgentState(TypedDict):

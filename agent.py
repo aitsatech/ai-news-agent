@@ -1,165 +1,118 @@
 import os
 import requests
 import random
+import datetime
 from typing import TypedDict, List
 from langgraph.graph import StateGraph, END
 from langchain_groq import ChatGroq
 from langchain_community.tools import DuckDuckGoSearchRun
-from datetime import datetime
-    today = datetime.now().strftime("%Y-%m-%d")
-    filename = f"_posts/{today}-{state['topic'].replace(' ', '-').lower()}.md"
-    # Ensure the _posts directory exists
-    os.makedirs("_posts", exist_ok=True)
-    with open(filename, "w") as f:
-        # Chirpy also requires "Front Matter" at the top of every post
-        f.write(f"---\ntitle: {state['topic']}\ndate: {today} 12:00:00 +0000\ncategories: [AI, News]\n---\n")
-        f.write(final_state['content'])
 
-# 1. Define the Shared State (The Agent's "Brain")
+# 1. Define the Shared State
 class AgentState(TypedDict):
-    field: str        # Broad area (e.g., "AI in Medicine")
-    topic: str        # Specific selected headline
-    research: str     # Raw search data
+    field: str        # The broad area of interest
+    topic: str        # The specific trending story selected
+    research: str     # Collected data
     outline: List[str]# Section titles
-    content: str      # The growing article
-    iteration: int    # Current section counter
-    image_url: str    # URL of generated header
+    content: str      # The growing markdown body
+    iteration: int    # Progress tracker
+    image_url: str    # The final image link
 
-# 2. Setup Tools & Models
-# Using Llama 3.3 70B for its superior logic and formatting adherence
+# 2. Setup Models & Search
 llm = ChatGroq(model_name="llama-3.3-70b-versatile", temperature=0.3)
 search = DuckDuckGoSearchRun()
 
-# --- THE TASK FORCE NODES ---
+# --- TASK FORCE NODES ---
 
 def trend_scout_node(state: AgentState):
-    """Scans the web for the most 'viral' news in the given field."""
-    print(f"📡 Trend Scout: Scanning {state['field']} for 2026 breakthroughs...")
-    raw_news = search.run(f"latest trending news and breakthroughs in {state['field']} 2026")
-    
-    prompt = f"""Based on this news: {raw_news}
-    Pick the SINGLE most impactful and SEO-rich story for a 2,000-word deep dive.
-    Return ONLY the title of the article."""
-    
-    selected_topic = llm.invoke(prompt).content.strip().replace('"', '')
-    print(f"🎯 Topic Selected: {selected_topic}")
-    return {"topic": selected_topic}
+    print(f"📡 Trend Scout: Finding viral breakthroughs in {state['field']}...")
+    news = search.run(f"latest trending breakthroughs and news in {state['field']} 2026")
+    prompt = f"Based on this news: {news}\nPick the SINGLE most viral story for a deep-dive. Return ONLY the title."
+    topic = llm.invoke(prompt).content.strip().replace('"', '')
+    print(f"🎯 Selected Topic: {topic}")
+    return {"topic": topic}
 
 def researcher_node(state: AgentState):
-    """Performs deep-dive research on the chosen topic."""
     print(f"🕵️ Researcher: Deep-diving into '{state['topic']}'...")
-    queries = [
-        f"{state['topic']} technical details and facts 2026",
-        f"{state['topic']} expert opinions and industry impact",
-        f"{state['topic']} statistics and future predictions"
-    ]
-    results = [search.run(q) for q in queries]
-    return {"research": "\n\n".join(results)}
+    data = search.run(f"{state['topic']} technical details and expert analysis 2026")
+    return {"research": data}
 
 def architect_node(state: AgentState):
-    """Creates a 5-6 section SEO-optimized blueprint."""
-    print("📐 Architect: Building 2026 SEO/AIO outline...")
-    prompt = f"""Using this research: {state['research']}
-    Create a 6-section outline for an article titled '{state['topic']}'.
-    Each section should be a question-based H2 (e.g., 'How does X work?').
-    Return ONLY the section titles, one per line."""
-    
-    response = llm.invoke(prompt).content
-    sections = [s.strip() for s in response.split('\n') if len(s.strip()) > 5]
+    print("📐 Architect: Planning 2,000-word structure...")
+    prompt = f"Create a 6-section H2 outline for '{state['topic']}' using research: {state['research']}. Return ONLY titles, one per line."
+    sections = [s.strip() for s in llm.invoke(prompt).content.split('\n') if len(s.strip()) > 5]
     return {"outline": sections}
 
 def writer_node(state: AgentState):
-    """Writes one section at a time to achieve massive length and detail."""
     current_section = state['outline'][state['iteration']]
-    print(f"✍️ Writer: Drafting Section {state['iteration'] + 1} of {len(state['outline'])}...")
-    
-    prompt = f"""Write a comprehensive section for the heading: '## {current_section}'.
-    STRICT 2026 AIO RULES:
-    1. Answer-First: Start with a bolded, 1-sentence direct answer.
-    2. Skimmable: Paragraphs must be max 3 sentences.
-    3. Formatting: Use bullet points or numbered lists where possible.
-    4. Depth: Use research context: {state['research']}.
-    Length target: 400 words."""
-    
-    response = llm.invoke(prompt).content
-    return {
-        "content": state['content'] + "\n\n" + response, 
-        "iteration": state['iteration'] + 1
-    }
+    print(f"✍️ Writer: Drafting {current_section}...")
+    prompt = f"""Write a section for: {current_section}. 
+    RULES: Answer-First (start with bold answer), short paragraphs (max 3 sentences), use bullet points.
+    Research: {state['research']}. Length: 400 words."""
+    res = llm.invoke(prompt).content
+    return {"content": state['content'] + f"\n\n## {current_section}\n" + res, "iteration": state['iteration'] + 1}
 
 def aio_editor_node(state: AgentState):
-    """Adds the 'Key Takeaways' box required for AI search snippets."""
-    print("📋 AIO Editor: Creating the 'Key Takeaways' snippet...")
-    prompt = f"""Based on this article: {state['content'][:2000]}
-    Create a 'Key Takeaways' box.
-    Format: Use a Markdown blockquote (>) with 3 bullet points.
-    Goal: Summarize the article for an AI Search Engine overview."""
-    
+    print("📋 AIO Editor: Drafting the 'Key Takeaways' box...")
+    prompt = f"Create a Markdown blockquote (>) with 3 bullet points summarizing: {state['content'][:1500]}."
     box = llm.invoke(prompt).content
-    full_article = f"# {state['topic']}\n\n{box}\n\n{state['content']}"
-    return {"content": full_article}
+    return {"content": box + "\n\n" + state['content']}
 
 def designer_node(state: AgentState):
-    """Generates a high-quality visual for the article header."""
-    print("🎨 Designer: Designing the visual identity...")
-    prompt_gen = f"Describe a cinematic, futuristic 8k digital art piece for: {state['topic']}. Max 10 words."
-    img_prompt = llm.invoke(prompt_gen).content.strip().replace(" ", "-")
-    
-    # Using Pollinations.ai for automated image generation
-    image_url = f"https://image.pollinations.ai/prompt/{img_prompt}?width=1280&height=720&nologo=true&seed={random.randint(1,1000)}"
-    
-    header_img = f"![Featured Image]({image_url})\n\n"
-    return {"content": header_img + state['content'], "image_url": image_url}
+    print("🎨 Designer: Generating custom header image...")
+    img_prompt = llm.invoke(f"Short 10-word art prompt for: {state['topic']}").content.replace(" ", "-")
+    image_url = f"https://image.pollinations.ai/prompt/{img_prompt}?width=1280&height=720&nologo=true&seed={random.randint(1,999)}"
+    image_md = f"![Header Image]({image_url})\n\n"
+    return {"content": image_md + state['content'], "image_url": image_url}
 
-# --- THE GRAPH ARCHITECTURE ---
+# --- GRAPH LOGIC ---
 
 workflow = StateGraph(AgentState)
 
-# Register nodes
-workflow.add_node("trend_scout", trend_scout_node)
+workflow.add_node("scout", trend_scout_node)
 workflow.add_node("researcher", researcher_node)
 workflow.add_node("architect", architect_node)
 workflow.add_node("writer", writer_node)
-workflow.add_node("aio_editor", aio_editor_node)
+workflow.add_node("editor", aio_editor_node)
 workflow.add_node("designer", designer_node)
 
-# Connect nodes
-workflow.set_entry_point("trend_scout")
-workflow.add_edge("trend_scout", "researcher")
+workflow.set_entry_point("scout")
+workflow.add_edge("scout", "researcher")
 workflow.add_edge("researcher", "architect")
 workflow.add_edge("architect", "writer")
 
-# Logic: Loop back to 'writer' until the outline is finished
-def should_continue(state: AgentState):
-    if state['iteration'] < len(state['outline']):
-        return "writer"
-    return "aio_editor"
+def loop_check(state):
+    return "writer" if state['iteration'] < len(state['outline']) else "editor"
 
-workflow.add_conditional_edges("writer", should_continue)
-workflow.add_edge("aio_editor", "designer")
+workflow.add_conditional_edges("writer", loop_check)
+workflow.add_edge("editor", "designer")
 workflow.add_edge("designer", END)
 
 app = workflow.compile()
 
-# --- EXECUTION ---
+# --- THE JEKYLL PUBLISHING BLOCK ---
 
 if __name__ == "__main__":
-    # Change this field to whatever you want the agent to 'scout' for news
-    MY_FIELD = "Artificial Intelligence and Robotics"
+    FIELD = "Artificial Intelligence and Robotics"
+    print(f"🚀 Launching Newsroom for: {FIELD}")
     
-    print(f"🚀 Starting AI Newsroom for: {MY_FIELD}")
+    final_state = app.invoke({"field": FIELD, "topic": "", "content": "", "iteration": 0})
     
-    final_state = app.invoke({
-        "field": MY_FIELD,
-        "topic": "",
-        "content": "",
-        "iteration": 0
-    })
+    # Format for Jekyll
+    today = datetime.datetime.now().strftime("%Y-%m-%d")
+    slug = final_state['topic'].lower().replace(" ", "-").replace(":", "")
+    filename = f"_posts/{today}-{slug}.md"
     
-    # Save the mega-article
-    os.makedirs("content", exist_ok=True)
-    filename = "content/latest_news.md"
+    os.makedirs("_posts", exist_ok=True)
+    
+    front_matter = f"""---
+layout: post
+title: "{final_state['topic']}"
+date: {today}
+categories: AI News
+---
+
+"""
     with open(filename, "w") as f:
-        f.write(final_state['content'])
+        f.write(front_matter + final_state['content'])
     
-    print(f"✅ Success! 2,000+ word article published with custom imagery to {filename}")
+    print(f"✅ Success: Published {filename}")

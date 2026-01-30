@@ -1,11 +1,10 @@
 # The Site Configuration
 
 # 1. FIX: Use remote_theme instead of theme
-remote_theme: cotes2020/jekyll-theme-chirpy
+theme: jekyll-theme-chirpy
 
 # 2. FIX: Added required plugins for Chirpy to function on GitHub Pages
 plugins:
-  - jekyll-remote-theme
   - jekyll-feed
   - jekyll-seo-tag
   - jekyll-sitemap

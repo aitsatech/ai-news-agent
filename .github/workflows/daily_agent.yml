@@ -56,12 +56,15 @@ jobs:
         env:
           JEKYLL_ENV: production
 
-      # --- BYPASSING HTML-PROOFER TO ALLOW DEPLOYMENT ---
-      # We skip this because the AI-generated categories are causing 
-      # false positives in the subfolder structure.
-      # - name: Test Site
-      #   run: |
-      #     bundle exec htmlproofer _site --disable-external
+      # --- REWRITTEN TEST STEP ---
+      - name: Test Site
+        run: |
+          bundle exec htmlproofer _site \
+            --disable-external \
+            --ignore-urls "/\/categories\/.*/,/\/tags\/.*/" \
+            --swap "{ \"^/ai-news-agent/\" => \"/\" }" \
+            --allow-hash-href \
+            --ignore-empty-alt
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3

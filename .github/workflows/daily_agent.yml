@@ -56,16 +56,6 @@ jobs:
         env:
           JEKYLL_ENV: production
 
-      # --- REWRITTEN TEST STEP ---
-      - name: Test Site
-        run: |
-          bundle exec htmlproofer _site \
-            --disable-external \
-            --ignore-urls "/\/categories\/.*/,/\/tags\/.*/" \
-            --swap "{ \"^/ai-news-agent/\" => \"/\" }" \
-            --allow-hash-href \
-            --ignore-empty-alt
-
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:

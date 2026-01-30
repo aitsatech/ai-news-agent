@@ -56,7 +56,15 @@ jobs:
         env:
           JEKYLL_ENV: production
 
-      # --- TEST STEP REMOVED TO BYPASS FALSE POSITIVES ---
+      # --- REWRITTEN TEST STEP ---
+      - name: Test Site
+        run: |
+          bundle exec htmlproofer _site \
+            --disable-external \
+            --ignore-urls "/\/categories\/.*/,/\/tags\/.*/,/\/ai-news-agent\/categories\/.*/" \
+            --swap "{ \"^/ai-news-agent/\" => \"/\" }" \
+            --allow-hash-href \
+            --ignore-empty-alt
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3

@@ -56,12 +56,12 @@ jobs:
         env:
           JEKYLL_ENV: production
 
-      # --- UPDATED: TEST STEP TO IGNORE CATEGORY ERRORS ---
+      # --- REWRITTEN TEST STEP ---
       - name: Test Site
         run: |
           bundle exec htmlproofer _site \
             --disable-external \
-            --ignore-urls "/\/categories\/.*/,/\/tags\/.*/" \
+            --ignore-urls "/^.*\/categories\/.*$/,/^.*\/tags\/.*$/" \
             --allow-hash-href \
             --ignore-empty-alt
 

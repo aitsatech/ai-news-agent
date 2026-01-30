@@ -2,14 +2,9 @@
 
 source "https://rubygems.org"
 
-# Use Jekyll 4 for better performance and 2026 compatibility
+# Force a stable version to bypass the 'MockGemspec' bug
 gem "jekyll", "4.3.4"
 
-# The core theme gem
-gem "jekyll-theme-chirpy", "~> 7.1"
-
-# REQUIRED PLUGINS for GitHub Pages + Chirpy
-# These must match the 'plugins' list in your _config.yml
 group :jekyll_plugins do
   gem "jekyll-remote-theme"
   gem "jekyll-include-cache"
@@ -18,6 +13,8 @@ group :jekyll_plugins do
   gem "jekyll-sitemap"
   gem "jekyll-paginate"
 end
+
+gem "jekyll-theme-chirpy", "~> 7.1"
 
 # Testing and local development tools
 gem "html-proofer", "~> 5.0", group: :test

@@ -61,12 +61,15 @@ jobs:
       # 2. We run the proofer but use '|| true' to ensure the build never stops here.
       - name: Test Site
         run: |
+          # Create placeholder directories to prevent "does not exist" errors
           mkdir -p _site/categories/ai _site/categories/news
+          
           bundle exec htmlproofer _site \
             --disable-external \
             --ignore-urls "/\/categories\/.*/,/\/tags\/.*/" \
             --swap "{ \"^/ai-news-agent/\" => \"/\" }" \
-            || true
+            --allow-hash-href \
+            --ignore-empty-alt
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3

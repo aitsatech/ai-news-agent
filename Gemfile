@@ -3,7 +3,7 @@
 source "https://rubygems.org"
 
 # Use Jekyll 4 for better performance and 2026 compatibility
-gem "jekyll", "~> 4.4"
+gem "jekyll", "4.3.4"
 
 # The core theme gem
 gem "jekyll-theme-chirpy", "~> 7.1"

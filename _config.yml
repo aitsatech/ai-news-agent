@@ -7,16 +7,16 @@ description: >-
 
 # Allow posts with a date in the future to be displayed
 future: true
-
 reading_time: true
 
-# FIX: URL and Baseurl
+# URL Settings - MUST match repository name
 url: "https://aitsatech.github.io"
 baseurl: "/ai-news-agent"
 
-# FIX: Chirpy on GitHub Pages works best with remote_theme
+# Theme Settings
 remote_theme: cotes2020/jekyll-theme-chirpy
 
+# Essential Plugins
 plugins:
   - jekyll-feed
   - jekyll-seo-tag
@@ -28,15 +28,11 @@ lang: en
 timezone: Africa/Johannesburg
 theme_mode: dark
 
-# GitHub Metadata
-github:
-  username: aitsatech
-
-social:
+# Social/Author Info
+author:
   name: AI Editorial Bot
   email: example@domain.com
-  links:
-    - https://github.com/aitsatech
+  github: aitsatech
 
 paginate: 10
 

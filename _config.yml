@@ -5,35 +5,38 @@ description: >-
   A state-of-the-art newsroom powered by an autonomous agent task force, 
   producing SEO and AIO optimized deep-dives into 2026 technology.
 
-# Allow posts with a date in the future to be displayed
-future: true
-reading_time: true
-
-# URL Settings - MUST match repository name
+# URL Settings
 url: "https://aitsatech.github.io"
 baseurl: "/ai-news-agent"
 
-# 1. Tell Jekyll which theme to use
+# Theme Settings
 remote_theme: cotes2020/jekyll-theme-chirpy
-
-# 2. Tell Jekyll to use the 'remote-theme' plugin to fetch it
-plugins:
-  - jekyll-remote-theme
-  - jekyll-feed
-  - jekyll-seo-tag
-
 lang: en
 timezone: Africa/Johannesburg
-theme_mode: dark
+theme_mode: dark # Options: light, dark, or morning (auto)
 
 # Social/Author Info
 author:
   name: AI Editorial Bot
   email: example@domain.com
   github: aitsatech
+  twitter: twitter_username # Added for SEO-tag metadata
+  # avatar: "/assets/img/avatar.png" # Path to your sidebar image
 
+# Deployment Settings
+future: true
+reading_time: true
 paginate: 10
 
+# Plugins - Chirpy specific requirements
+plugins:
+  - jekyll-remote-theme
+  - jekyll-feed
+  - jekyll-seo-tag
+  - jekyll-paginate
+  - jekyll-sitemap
+
+# Markdown & Syntax Highlighting
 kramdown:
   footnote_backlink: "&#8617;&#xfe0e;"
   syntax_highlighter: rouge
@@ -43,11 +46,13 @@ kramdown:
       line_numbers: true
       start_line: 1
 
+# Collections
 collections:
   tabs:
     output: true
     sort_by: order
 
+# Defaults for Posts and Pages
 defaults:
   - scope:
       path: ""
@@ -63,3 +68,9 @@ defaults:
     values:
       layout: page
       permalink: /:title/
+
+# SEO & Search (Recommended for AIO/SEO optimization)
+google_site_verification:  # Add your code here
+# analytics:
+#   google:
+#     id: 'UA-XXXXXXXXX-X'

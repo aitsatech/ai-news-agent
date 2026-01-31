@@ -11,6 +11,7 @@ baseurl: "/ai-news-agent"
 
 # Theme Settings
 remote_theme: cotes2020/jekyll-theme-chirpy
+ignore_theme_config: true
 lang: en
 timezone: Africa/Johannesburg
 theme_mode: dark # Options: light, dark, or morning (auto)

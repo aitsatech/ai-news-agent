@@ -28,22 +28,25 @@ jobs:
           pip install --upgrade pip
           pip install langchain langchain-community langchain-groq langgraph duckduckgo-search ddgs pydantic requests
 
-      - name: Run Agent Task Force
+      - name: Run Cleanup and Agent Task Force
         env:
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
-        run: python agent.py
+        run: |
+          # Clean old posts first to keep the repo lean
+          python cleanup.py
+          # Generate the new article
+          python agent.py
 
-      - name: Commit and Push Article
+      - name: Commit and Push Changes
         run: |
           git config --global user.name "AI Editor"
           git config --global user.email "editor@ai-news.bot"
           git add .
-          # Only commit if there are changes
+          # This handles both the deleted old posts and the new post
           if git diff --staged --quiet; then
-            echo "No new articles found. Skipping commit."
+            echo "No changes to commit."
           else
-            git commit -m "New Article: $(date)"
-            # Pull latest changes to avoid (non-fast-forward) errors
+            git commit -m "AI Update: New article & archive cleanup $(date)"
             git pull --rebase origin main
             git push origin main
           fi
@@ -66,13 +69,14 @@ jobs:
       - name: Test Site
         continue-on-error: true
         run: |
-          # Create dummy folders to satisfy the checker
-          mkdir -p _site/ai-news-agent/categories/ai _site/ai-news-agent/categories/news
+          # Create dummy folders to satisfy the checker for subpaths
+          mkdir -p "_site${{ steps.pages.outputs.base_path }}/categories/ai"
+          mkdir -p "_site${{ steps.pages.outputs.base_path }}/categories/news"
           
           bundle exec htmlproofer _site \
             --disable-external \
             --ignore-urls "/\/categories\/.*/,/\/tags\/.*/" \
-            --swap "{ \"^/ai-news-agent/\" => \"/\" }" \
+            --swap-urls "{ \"^${{ steps.pages.outputs.base_path }}\" : \"\" }" \
             --allow-hash-href \
             --ignore-empty-alt
 

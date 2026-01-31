@@ -3,7 +3,7 @@ import requests
 import random
 import datetime
 import re
-from PIL import Image
+from PIL import Image, ImageDraw, ImageFont
 from io import BytesIO
 from typing import TypedDict, List
 from langgraph.graph import StateGraph, END
@@ -12,11 +12,10 @@ from langchain_community.tools import DuckDuckGoSearchRun
 from google import genai
 from google.genai import types
 
-# Initialize Gemini Client for Nano Banana
+# Initialize Gemini Client
 api_key = os.getenv("GEMINI_API_KEY")
 client = genai.Client(api_key=api_key)
 
-# 1. Define the Shared State
 class AgentState(TypedDict):
     field: str
     topic: str
@@ -26,12 +25,12 @@ class AgentState(TypedDict):
     iteration: int
     image_url: str
 
-# 2. Setup Models - UPDATED FOR 2026 DEPRECATIONS
+# Models
 llm_strategy = ChatGroq(model_name="llama-3.3-70b-versatile", temperature=0.3)
 llm_writer = ChatGroq(model_name="llama-3.1-8b-instant", temperature=0.5)
 search = DuckDuckGoSearchRun()
 
-# --- TASK FORCE NODES ---
+# --- NODES ---
 
 def trend_scout_node(state: AgentState):
     print(f"📡 Trend Scout: Finding viral breakthroughs...")
@@ -50,11 +49,11 @@ def architect_node(state: AgentState):
     print("📐 Architect: Planning high-impact structure...")
     prompt = (
         f"Create a 4-section outline for '{state['topic']}'. "
-        "Return ONLY the titles, one per line. Do NOT include labels like 'H2', 'Section', or numbers."
+        "Return ONLY the titles, one per line. No labels like 'H2' or 'Section'."
     )
     raw_sections = llm_strategy.invoke(prompt).content.split('\n')
-    # Clean out any "H2" or "Section" prefixes the LLM might try to sneak in
-    sections = [re.sub(r'^(H2|Section|Step|Title|Header)\s*:?\s*', '', s, flags=re.I).strip() for s in raw_sections if len(s.strip()) > 5]
+    sections = [re.sub(r'^(H2|Section|Step|Title|Header|[0-9]\.)\s*:?\s*', '', s, flags=re.I).strip() 
+                for s in raw_sections if len(s.strip()) > 5]
     return {"outline": sections[:4]}
 
 def writer_node(state: AgentState):
@@ -63,13 +62,12 @@ def writer_node(state: AgentState):
     prompt = f"""Write a section for: {current_section}. 
     Research: {state['research']}. 
     RULES: 
-    1. DO NOT repeat the title or include any headers in your response.
+    1. DO NOT repeat the title.
     2. Bold the first sentence. 
-    3. Max 250 words. 
+    3. Max 200 words. 
     4. Use 1 bulleted list."""
     
     res = llm_writer.invoke(prompt).content.strip()
-    # Add ONLY the markdown header here. No "H2" text.
     section_md = f"\n\n## {current_section}\n\n{res}"
     return {"content": state['content'] + section_md, "iteration": state['iteration'] + 1}
 
@@ -80,37 +78,48 @@ def aio_editor_node(state: AgentState):
     return {"content": "> ### Key Takeaways\n>\n" + box + "\n\n" + state['content']}
 
 def designer_node(state: AgentState):
-    print("🎨 Designer: Generating high-fidelity header with Nano Banana...")
-    img_prompt = (
-        f"A cinematic, high-quality professional header image for a news article about {state['topic']}. "
-        "Style: Futuristic digital art, clean, 8k resolution, vibrant lighting."
-    )
-    
-    response = client.models.generate_content(
-        model="gemini-2.0-flash",
-        contents=[img_prompt],
-        config=types.GenerateContentConfig(
-            image_config=types.ImageConfig(aspect_ratio="16:9")
-        )
-    )
-
+    print("🎨 Designer: Generating header...")
     os.makedirs("assets/img", exist_ok=True)
-    # Create a safe filename from the topic
     safe_topic = re.sub(r'[^a-zA-Z0-9]', '-', state['topic'][:20]).lower()
     img_filename = f"header-{safe_topic}-{random.randint(100,999)}.png"
     img_path = f"assets/img/{img_filename}"
     
-    for part in response.parts:
-        if part.inline_data:
-            image = Image.open(BytesIO(part.inline_data.data))
-            image.save(img_path)
-    
-    # Correct path for Chirpy theme
+    # --- TIER 1: GEMINI NANO BANANA ---
+    try:
+        img_prompt = f"A futuristic professional header for: {state['topic']}."
+        response = client.models.generate_content(
+            model="gemini-2.0-flash",
+            contents=[img_prompt],
+            config=types.GenerateContentConfig(image_config=types.ImageConfig(aspect_ratio="16:9"))
+        )
+        for part in response.parts:
+            if part.inline_data:
+                Image.open(BytesIO(part.inline_data.data)).save(img_path)
+        print("✨ Success: Gemini generated image.")
+        
+    except Exception as e:
+        print(f"⚠️ Tier 1 Failed (Gemini Quota): {e}")
+        # --- TIER 2: UNSPLASH FALLBACK ---
+        try:
+            print("🌐 Attempting Tier 2: Unsplash fallback...")
+            fallback_url = "https://images.unsplash.com/photo-1485827404703-89b55fcc595e?auto=format&fit=crop&q=80&w=1200"
+            resp = requests.get(fallback_url, timeout=10)
+            Image.open(BytesIO(resp.content)).save(img_path)
+            print("✨ Success: Unsplash image saved.")
+        except Exception as e2:
+            print(f"⚠️ Tier 2 Failed (Network/API): {e2}")
+            # --- TIER 3: LOCAL GENERATED PLACEHOLDER ---
+            print("🖼️ Attempting Tier 3: Local placeholder...")
+            img = Image.new('RGB', (1200, 675), color=(30, 30, 35))
+            d = ImageDraw.Draw(img)
+            d.text((400, 300), "AI & ROBOTICS NEWS", fill=(255, 255, 255))
+            img.save(img_path)
+            print("✨ Success: Local placeholder created.")
+
     image_md = f"![Header Image](/{img_path})\n\n"
     return {"content": image_md + state['content'], "image_url": img_path}
 
-# --- GRAPH LOGIC ---
-
+# --- GRAPH ---
 workflow = StateGraph(AgentState)
 workflow.add_node("scout", trend_scout_node)
 workflow.add_node("researcher", researcher_node)
@@ -130,43 +139,25 @@ def loop_check(state):
 workflow.add_conditional_edges("writer", loop_check)
 workflow.add_edge("editor", "designer")
 workflow.add_edge("designer", END)
-
 app = workflow.compile()
 
-# --- THE JEKYLL PUBLISHING BLOCK ---
-
+# --- PUBLISHING ---
 if __name__ == "__main__":
     FIELD = "Artificial Intelligence and Robotics"
-    print(f"🚀 Launching Newsroom for: {FIELD}")
-    
     final_state = app.invoke({"field": FIELD, "topic": "", "content": "", "iteration": 0, "research": ""})
     
     today = datetime.datetime.now().strftime("%Y-%m-%d")
-    clean_topic = "".join(c for c in final_state['topic'] if c.isalnum() or c==' ').strip()
-    slug = clean_topic.lower().replace(" ", "-")
+    slug = re.sub(r'[^a-z0-9]', '-', final_state['topic'].lower())[:40].strip("-")
     filename = f"_posts/{today}-{slug}.md"
     
+    # PERMANENT FORMATTING FIX: Remove H2 tags and duplicate lines
+    clean_content = final_state['content']
+    clean_content = clean_content.replace("## H2", "##").replace("H2 ", "").replace("## ##", "##")
+    clean_content = re.sub(r'\n{3,}', '\n\n', clean_content)
+    
+    fm = f"---\nlayout: post\ntitle: \"{final_state['topic']}\"\ndate: {today} 12:00:00 +0200\ncategories: [AI]\n---\n\n"
+    
     os.makedirs("_posts", exist_ok=True)
-    
-    # FINAL CLEANUP: Ensure NO "H2" tags or triple headers exist in the final string
-    clean_content = final_state['content'].replace("## H2", "##").replace("H2 ", "")
-    clean_content = re.sub(r'\n{3,}', '\n\n', clean_content) 
-    
-    # Safe Front Matter using list join
-    fm_lines = [
-        "---",
-        "layout: post",
-        f'title: "{final_state["topic"]}"',
-        f"date: {today} 12:00:00 +0200",
-        "categories: [AI, News]",
-        "tags: [ai, robotics, future]",
-        "---",
-        "",
-        ""
-    ]
-    front_matter = "\n".join(fm_lines)
-    
     with open(filename, "w", encoding="utf-8") as f:
-        f.write(front_matter + clean_content)
-    
+        f.write(fm + clean_content)
     print(f"✅ Success: Published {filename}")

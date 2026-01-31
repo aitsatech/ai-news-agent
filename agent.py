@@ -87,7 +87,7 @@ def designer_node(state: AgentState):
     )
     
     response = client.models.generate_content(
-        model="gemini-2.5-flash-image",
+        model="gemini-2.0-flash",
         contents=[img_prompt],
         config=types.GenerateContentConfig(
             image_config=types.ImageConfig(aspect_ratio="16:9")

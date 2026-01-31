@@ -2,10 +2,11 @@
 
 source "https://rubygems.org"
 
+# Core Jekyll and Chirpy Theme
 gem "jekyll", "~> 4.3.4"
 gem "jekyll-theme-chirpy", "~> 7.0"
 
-# Explicitly list these so the build runner can find them
+# Explicitly list all plugins from your _config.yml
 group :jekyll_plugins do
   gem "jekyll-feed"
   gem "jekyll-seo-tag"
@@ -17,13 +18,12 @@ group :jekyll_plugins do
   gem "jekyll-twitter-plugin"
 end
 
+# Required for Ruby 3.3+ compatibility
 gem "csv"
 gem "base64"
+gem "webrick" # Required for local serving in newer Ruby versions
 
-group :test do
-  gem "html-proofer", "~> 5.0"
-end
-
+# Support for different Operating Systems
 platforms :mingw, :x64_mingw, :mswin, :jruby do
   gem "tzinfo", ">= 1", "< 3"
   gem "tzinfo-data"

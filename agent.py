@@ -51,7 +51,6 @@ def architect_node(state: AgentState):
         "Return ONLY the titles, one per line. No labels like 'H2' or 'Section'."
     )
     raw_sections = llm_strategy.invoke(prompt).content.split('\n')
-    # Clean out any "H2:" or "Section 1" text from the LLM response
     sections = [re.sub(r'^(H2|Section|Step|Title|Header|[0-9]\.)\s*:?\s*', '', s, flags=re.I).strip() 
                 for s in raw_sections if len(s.strip()) > 5]
     return {"outline": sections[:4]}
@@ -68,7 +67,6 @@ def writer_node(state: AgentState):
     4. Use 1 bulleted list."""
     
     res = llm_writer.invoke(prompt).content.strip()
-    # Ensure clean Markdown header
     section_md = f"\n\n## {current_section}\n\n{res}"
     return {"content": state['content'] + section_md, "iteration": state['iteration'] + 1}
 
@@ -78,6 +76,45 @@ def aio_editor_node(state: AgentState):
     box = llm_strategy.invoke(prompt).content
     return {"content": "> ### Key Takeaways\n>\n" + box + "\n\n" + state['content']}
 
+def update_site_branding_avatar(state: AgentState):
+    """
+    Updates the main branding logo located above the 'AI Daily Insights' header.
+    Path: assets/img/avatar.png
+    """
+    print("🎨 Branding: Updating site logo/avatar...")
+    avatar_dir = "assets/img"
+    os.makedirs(avatar_dir, exist_ok=True)
+    avatar_path = os.path.join(avatar_dir, "aitsa.png")
+    
+    avatar_prompt = "A minimalist, high-tech circular vector logo for an AI news site. 4k, clean lines, futuristic aesthetic."
+
+    try:
+        response = client.models.generate_content(
+            model="gemini-2.0-flash",
+            contents=[avatar_prompt],
+            config=types.GenerateContentConfig(image_config=types.ImageConfig(aspect_ratio="1:1"))
+        )
+        for part in response.parts:
+            if part.inline_data:
+                with open(avatar_path, "wb") as f:
+                    f.write(part.inline_data.data)
+                print("✅ Site avatar updated with Gemini.")
+                return state
+    except Exception as e:
+        print(f"⚠️ Gemini Avatar Failed: {e}")
+        
+    try:
+        fallback_url = "https://images.unsplash.com/photo-1675557009875-436f595b18b8?auto=format&fit=crop&q=80&w=300&h=300"
+        resp = requests.get(fallback_url, timeout=10)
+        content_type = resp.headers.get('Content-Type', '')
+        if resp.status_code == 200 and 'image' in content_type:
+            with open(avatar_path, "wb") as f:
+                f.write(resp.content)
+            print("✅ Site avatar updated via Validated Fallback.")
+    except Exception as e:
+        print(f"❌ Critical: Could not update avatar: {e}")
+    return state
+
 def designer_node(state: AgentState):
     print("🎨 Designer: Generating header...")
     os.makedirs("assets/img", exist_ok=True)
@@ -85,11 +122,6 @@ def designer_node(state: AgentState):
     img_filename = f"header-{safe_topic}-{random.randint(100,999)}.png"
     img_path = f"assets/img/{img_filename}"
     
-    keywords = ["robotics", "cyberpunk", "biotech", "quantum-computing", "artificial-intelligence"]
-    selected_keyword = random.choice(keywords)
-    random_seed = random.randint(1, 5000)
-    
-    # --- TIER 1: GEMINI AI GENERATION ---
     try:
         img_prompt = f"A high-tech professional cinematic header for: {state['topic']}."
         response = client.models.generate_content(
@@ -107,25 +139,17 @@ def designer_node(state: AgentState):
     except Exception as e:
         print(f"⚠️ Tier 1 Failed: {e}")
 
-    # --- TIER 2: FALLBACK WITH VALIDATION ---
     try:
-        print(f"🌐 Attempting Tier 2: Unsplash ({selected_keyword})...")
         fallback_url = f"https://images.unsplash.com/photo-1485827404703-89b55fcc595e?auto=format&fit=crop&q=80&w=1200"
         resp = requests.get(fallback_url, timeout=15)
-        
-        # VALIDATION: Ensure we actually got an image and not an HTML Error Page
         content_type = resp.headers.get('Content-Type', '')
         if resp.status_code == 200 and 'image' in content_type:
             with open(img_path, "wb") as f:
                 f.write(resp.content)
-            print("✨ Success: Valid fallback image saved.")
             return {"content": f"![Header Image](/{img_path})\n\n" + state['content'], "image_url": img_path}
         else:
             raise ValueError(f"Received non-image content: {content_type}")
-
     except Exception as e2:
-        print(f"❌ Tier 2 Failed or Validation failed: {e2}")
-        # Final safety: Use a hardcoded external link if local saving is impossible
         ext_link = "https://images.unsplash.com/photo-1485827404703-89b55fcc595e"
         return {"content": f"![Header Image]({ext_link})\n\n" + state['content'], "image_url": ""}
 
@@ -159,25 +183,23 @@ if __name__ == "__main__":
         "research": "", "outline": [], "image_url": ""
     })
     
+    # Refresh site avatar/logo before finishing
+    update_site_branding_avatar(final_state)
+    
     today = datetime.datetime.now().strftime("%Y-%m-%d")
     slug = re.sub(r'[^a-z0-9]', '-', final_state['topic'].lower())[:40].strip("-")
     filename = f"_posts/{today}-{slug}.md"
     
-    # PERMANENT FIX: Clean Headers and Duplicates
+    # PERMANENT FIXES
     clean_content = final_state['content']
-    
-    # 1. Strip any "H2" text labels the LLM might have hallucinated next to ##
-    clean_content = re.sub(r'##\s*(H2|Header|Section|Title):?\s*', '## ', clean_content, flags=re.I)
-    
-    # 2. Prevent triple/quadruple line breaks (The "Duplicate Line" fix)
-    clean_content = re.sub(r'\n{3,}', '\n\n', clean_content)
-    
-    # 3. Final trim to remove leading/trailing whitespace
-    clean_content = clean_content.strip()
+    # 1. Strip H2 tag hallucinations
+    clean_content = re.sub(r'##\s*(H2|Header|Section|Title|Topic):?\s*', '## ', clean_content, flags=re.I)
+    # 2. Collapse duplicate line breaks (3+ to 2)
+    clean_content = re.sub(r'\n{3,}', '\n\n', clean_content).strip()
     
     fm = f"---\nlayout: post\ntitle: \"{final_state['topic']}\"\ndate: {today} 12:00:00 +0200\ncategories: [AI]\n---\n\n"
     
     os.makedirs("_posts", exist_ok=True)
     with open(filename, "w", encoding="utf-8") as f:
         f.write(fm + clean_content)
-    print(f"✅ Success: Published {filename} with clean formatting.")
+    print(f"✅ Success: Published {filename} with refreshed branding and clean formatting.")

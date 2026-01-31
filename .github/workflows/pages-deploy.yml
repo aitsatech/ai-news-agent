@@ -47,6 +47,11 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
 
+      - name: Install dependencies
+        run: |
+          pip install -U google-genai pillow
+          bundle install
+
   deploy:
     environment:
       name: github-pages

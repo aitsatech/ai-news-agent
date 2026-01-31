@@ -84,13 +84,19 @@ def designer_node(state: AgentState):
     img_filename = f"header-{safe_topic}-{random.randint(100,999)}.png"
     img_path = f"assets/img/{img_filename}"
     
-    # Random keywords for variety in fallbacks
-    tech_keywords = ["robotics", "cyberpunk", "artificial-intelligence", "quantum-computing", "biotech", "future-tech"]
-    selected_keyword = random.choice(tech_keywords)
+    # 20 Diverse Tech Keywords for variety
+    keywords = [
+        "robotics", "cyberpunk", "biotech", "quantum-computing", "artificial-intelligence",
+        "neural-networks", "microchips", "futuristic-city", "digital-human", "automation",
+        "data-science", "space-exploration", "virtual-reality", "nanotechnology", "coding",
+        "server-room", "hologram", "blockchain", "green-energy", "cyber-security"
+    ]
+    selected_keyword = random.choice(keywords)
+    random_seed = random.randint(1, 5000)
     
     # --- TIER 1: GEMINI NANO BANANA ---
     try:
-        img_prompt = f"A futuristic professional header for: {state['topic']}."
+        img_prompt = f"A high-tech professional cinematic header for: {state['topic']}."
         response = client.models.generate_content(
             model="gemini-2.0-flash",
             contents=[img_prompt],
@@ -107,18 +113,18 @@ def designer_node(state: AgentState):
         # --- TIER 2: RANDOMIZED UNSPLASH FALLBACK ---
         try:
             print(f"🌐 Attempting Tier 2: Random Unsplash ({selected_keyword})...")
-            # Using the source URL with a keyword ensures a different image each time
-            fallback_url = f"https://source.unsplash.com/featured/1200x675?{selected_keyword}"
+            # We add the 'sig' parameter to force Unsplash to give a new image every time
+            fallback_url = f"https://source.unsplash.com/featured/1200x675?{selected_keyword}&sig={random_seed}"
             resp = requests.get(fallback_url, timeout=15)
             with open(img_path, "wb") as f:
                 f.write(resp.content)
             print("✨ Success: Random Unsplash image saved.")
         except Exception as e2:
             print(f"⚠️ Tier 2 Failed: {e2}")
-            # --- TIER 3: STATIC CDN REDIRECT ---
+            # --- TIER 3: STATIC CDN WITH CACHE BUSTING ---
             print("🔗 Attempting Tier 3: Direct CDN link...")
-            # We use a specific ID but append a random string to force some variation
-            image_md = f"![Header Image](https://images.unsplash.com/photo-1620712943543-bcc4628c6bb5?auto=format&fit=crop&q=80&w=1200&sig={random.randint(1,1000)})\n\n"
+            # Using a varied source even at Tier 3
+            image_md = f"![Header Image](https://images.unsplash.com/photo-1485827404703-89b55fcc595e?auto=format&fit=crop&q=80&w=1200&sig={random_seed})\n\n"
             return {"content": image_md + state['content'], "image_url": ""}
 
     image_md = f"![Header Image](/{img_path})\n\n"

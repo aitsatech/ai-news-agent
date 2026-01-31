@@ -23,7 +23,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install -U ddgs langchain-groq langchain-community langgraph pillow google-genai
+          pip install -U ddgs langchain-groq langchain-community langgraph google-genai requests Pillow
 
       - name: Run News Agent
         env:

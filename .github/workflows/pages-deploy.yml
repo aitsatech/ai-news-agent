@@ -39,8 +39,8 @@ jobs:
         uses: actions/configure-pages@v4
 
       - name: Build with Jekyll
-        # Fixed the spacing and ensured the output path is quoted
-        run: bundle exec jekyll build -d "_site${{ steps.pages.outputs.base_path }}"
+        # This puts the files in the root of the artifact, fixing the 404
+        run: bundle exec jekyll build -d _site
         env:
           JEKYLL_ENV: production
 

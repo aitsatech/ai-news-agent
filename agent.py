@@ -3,7 +3,6 @@ import requests
 import random
 import datetime
 import re
-from PIL import Image, ImageDraw, ImageFont
 from io import BytesIO
 from typing import TypedDict, List
 from langgraph.graph import StateGraph, END
@@ -52,6 +51,7 @@ def architect_node(state: AgentState):
         "Return ONLY the titles, one per line. No labels like 'H2' or 'Section'."
     )
     raw_sections = llm_strategy.invoke(prompt).content.split('\n')
+    # Cleanup to prevent "H2: Title" issues
     sections = [re.sub(r'^(H2|Section|Step|Title|Header|[0-9]\.)\s*:?\s*', '', s, flags=re.I).strip() 
                 for s in raw_sections if len(s.strip()) > 5]
     return {"outline": sections[:4]}
@@ -92,29 +92,30 @@ def designer_node(state: AgentState):
             contents=[img_prompt],
             config=types.GenerateContentConfig(image_config=types.ImageConfig(aspect_ratio="16:9"))
         )
+        # We handle image saving without PIL by writing the raw bytes
         for part in response.parts:
             if part.inline_data:
-                Image.open(BytesIO(part.inline_data.data)).save(img_path)
+                with open(img_path, "wb") as f:
+                    f.write(part.inline_data.data)
         print("✨ Success: Gemini generated image.")
         
     except Exception as e:
-        print(f"⚠️ Tier 1 Failed (Gemini Quota): {e}")
+        print(f"⚠️ Tier 1 Failed: {e}")
         # --- TIER 2: UNSPLASH FALLBACK ---
         try:
             print("🌐 Attempting Tier 2: Unsplash fallback...")
             fallback_url = "https://images.unsplash.com/photo-1485827404703-89b55fcc595e?auto=format&fit=crop&q=80&w=1200"
             resp = requests.get(fallback_url, timeout=10)
-            Image.open(BytesIO(resp.content)).save(img_path)
+            with open(img_path, "wb") as f:
+                f.write(resp.content)
             print("✨ Success: Unsplash image saved.")
         except Exception as e2:
-            print(f"⚠️ Tier 2 Failed (Network/API): {e2}")
-            # --- TIER 3: LOCAL GENERATED PLACEHOLDER ---
-            print("🖼️ Attempting Tier 3: Local placeholder...")
-            img = Image.new('RGB', (1200, 675), color=(30, 30, 35))
-            d = ImageDraw.Draw(img)
-            d.text((400, 300), "AI & ROBOTICS NEWS", fill=(255, 255, 255))
-            img.save(img_path)
-            print("✨ Success: Local placeholder created.")
+            print(f"⚠️ Tier 2 Failed: {e2}")
+            # --- TIER 3: STATIC URL (NO LOCAL DRAWING) ---
+            print("🔗 Attempting Tier 3: Static fallback URL...")
+            # If everything else fails, we just point to a high-quality robot image online
+            image_md = f"![Header Image](https://images.unsplash.com/photo-1677442136019-21780ecad995?w=1200)\n\n"
+            return {"content": image_md + state['content'], "image_url": ""}
 
     image_md = f"![Header Image](/{img_path})\n\n"
     return {"content": image_md + state['content'], "image_url": img_path}
@@ -150,7 +151,7 @@ if __name__ == "__main__":
     slug = re.sub(r'[^a-z0-9]', '-', final_state['topic'].lower())[:40].strip("-")
     filename = f"_posts/{today}-{slug}.md"
     
-    # PERMANENT FORMATTING FIX: Remove H2 tags and duplicate lines
+    # H2 FIX: Remove tags and duplicate lines
     clean_content = final_state['content']
     clean_content = clean_content.replace("## H2", "##").replace("H2 ", "").replace("## ##", "##")
     clean_content = re.sub(r'\n{3,}', '\n\n', clean_content)

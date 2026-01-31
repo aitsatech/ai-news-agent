@@ -31,3 +31,7 @@ def cleanup_old_posts():
 
 if __name__ == "__main__":
     cleanup_old_posts()
+
+if not os.path.exists(POSTS_DIR):
+        print(f"📁 Folder {POSTS_DIR} not found. Skipping cleanup.")
+        return

@@ -24,7 +24,8 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -U ddgs langchain-groq langchain-community langgraph google-genai requests Pillow curl_cffi
+          pip install ddgs langchain-groq langchain-community langgraph google-genai requests curl_cffi
+          pip list # This will print everything installed so we can see it in the logs
           
       - name: Run News Agent
         env:

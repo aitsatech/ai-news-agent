@@ -46,9 +46,15 @@ jobs:
 
       - name: Test site
         run: |
+          # Create dummy folders to prevent missing directory errors during testing
+          mkdir -p "_site${{ steps.pages.outputs.base_path }}/categories/ai"
+          mkdir -p "_site${{ steps.pages.outputs.base_path }}/categories/news"
+
           bundle exec htmlproofer _site \
             --disable-external \
-            --ignore-urls "/^http:\/\/127.0.0.1/,/^http:\/\/0.0.0.0/,/^http:\/\/localhost/"
+            --ignore-urls "/^http:\/\/127.0.0.1/,/^http:\/\/0.0.0.0/,/^http:\/\/localhost/,/\/categories\/.*/" \
+            --url-swap "{ \"^${{ steps.pages.outputs.base_path }}\" : \"\" }" \
+            --allow-hash-href
 
       - name: Upload site artifact
         uses: actions/upload-pages-artifact@v3

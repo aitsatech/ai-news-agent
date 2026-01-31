@@ -1,7 +1,7 @@
 name: Daily AI Agent Blog
 on:
   schedule:
-    - cron: '15 5 * * *' # Updated to match your preferred publish time
+    - cron: '15 5 * * *' # Runs daily at 5:15 AM
   workflow_dispatch:   # Allows manual runs
 
 permissions:
@@ -28,16 +28,16 @@ jobs:
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
-          # 1. Clean old posts (Keep repo lean)
-          echo "🧹 Cleaning old posts..."
-          find _posts/ -name "*.md" -mtime +30 -delete
-          echo "✨ Cleanup complete."
-
-          # 2. Install dependencies (The Critical Fix)
+          # 1. Install dependencies first so scripts can run
           echo "📦 Installing libraries..."
           python -m pip install --upgrade pip
           pip install ddgs langchain-groq langchain-community langgraph google-genai requests curl_cffi
           
+          # 2. Run Cleanup (Using your cleanup.py script)
+          echo "🧹 Cleaning old posts..."
+          python cleanup.py
+          echo "✨ Cleanup complete."
+
           # 3. Verify installation for logs
           pip list | grep google
 

@@ -1,16 +1,4 @@
 ---
-layout: default
-title: Home
+layout: home
+# Chirpy will automatically handle the rest
 ---
-
-<h2>Latest AI Deep-Dives</h2>
-
-<ul>
-  {% for post in site.posts %}
-    <li>
-      <span class="post-date">{{ post.date | date: "%b %-d, %Y" }}</span>
-      <a href="{{ post.url | relative_url }}">{{ post.title }}</a>
-      <p>{{ post.excerpt | strip_html | truncatewords: 30 }}</p>
-    </li>
-  {% endfor %}
-</ul>

@@ -4,6 +4,7 @@ source "https://rubygems.org"
 
 # Jekyll 4.3.x is the stable standard for GitHub Pages
 gem "jekyll", "~> 4.3.4"
+gem "jekyll-theme-chirpy", "~> 7.0"
 
 # This gem is REQUIRED to make 'remote_theme' work
 gem "jekyll-remote-theme"

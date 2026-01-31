@@ -20,18 +20,27 @@ jobs:
         with:
           python-version: '3.10'
 
-      - name: Install Dependencies and Clean
-        run: |
-          python -m pip install --upgrade pip
-          pip install ddgs langchain-groq langchain-community langgraph google-genai requests curl_cffi
-          # Your cleanup command here (if it's a separate script, run it now)
-          echo "✨ Environment Ready"
-
-      - name: Run News Agent
+      - name: Prepare and Run Agent
         env:
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-        run: python agent.py
+        run: |
+          # 1. Clean old posts
+          echo "🧹 Cleaning old posts..."
+          find _posts/ -name "*.md" -mtime +30 -delete
+          echo "✨ Cleanup complete."
+
+          # 2. Install dependencies (The Critical Part)
+          echo "📦 Installing libraries..."
+          python -m pip install --upgrade pip
+          pip install ddgs langchain-groq langchain-community langgraph google-genai requests curl_cffi
+          
+          # 3. Verify installation (For your logs)
+          pip list | grep google
+
+          # 4. Run the actual agent
+          echo "🚀 Starting Agent..."
+          python agent.py
 
       - name: Commit and Push
         run: |

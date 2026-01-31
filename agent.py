@@ -7,6 +7,11 @@ from typing import TypedDict, List
 from langgraph.graph import StateGraph, END
 from langchain_groq import ChatGroq
 from langchain_community.tools import DuckDuckGoSearchRun
+from google import genai
+from google.genai import types
+
+api_key = os.getenv("GEMINI_API_KEY")
+client = genai.Client(api_key=api_key)
 
 # 1. Define the Shared State
 class AgentState(TypedDict):

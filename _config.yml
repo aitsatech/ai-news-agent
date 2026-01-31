@@ -13,34 +13,40 @@ baseurl: "/ai-news-agent"
 theme: jekyll-theme-chirpy
 lang: en
 timezone: Africa/Johannesburg
-theme_mode: dark # Options: light, dark, or morning (auto)
+theme_mode: dark # Options: light, dark
 
 # Social/Author Info
 author:
   name: AI Editorial Bot
-  email: example@domain.com
+  twitter: twitter_username # Just the username
   github: aitsatech
-  twitter: twitter_username
-  # avatar: "/assets/img/avatar.png"
+  email: example@domain.com
+
+# This block is required for Chirpy's UI
+social:
+  name: AI Editorial Bot
+  email: example@domain.com
+  links:
+    - https://twitter.com/twitter_username
+    - https://github.com/aitsatech
 
 # Deployment Settings
 future: true
 reading_time: true
 paginate: 10
 
-# Plugins - Integrated with new Gemfile additions
+# Plugins
 plugins:
   - jekyll-feed
   - jekyll-seo-tag
   - jekyll-paginate
   - jekyll-sitemap
   - jekyll-include-cache
-  - jekyll-archives        # Required for Chirpy tag/category pages
-  - jekyll-redirect-from   # Handles URL management
-  - jekyll-twitter-plugin  # Enables Liquid twitter tags
+  - jekyll-archives
+  - jekyll-redirect-from
+  - jekyll-twitter-plugin
 
 # Chirpy Archive Settings
-# This block tells the archives plugin how to name and place tag/category pages
 jekyll-archives:
   enabled: [categories, tags]
   layouts:
@@ -84,7 +90,7 @@ defaults:
       permalink: /:title/
 
 # SEO & Search
-google_site_verification:  # Add your code here
-# analytics:
-#   google:
-#     id: 'UA-XXXXXXXXX-X'
+google_site_verification: 
+# Chirpy Search settings
+search:
+  hints: true # Set to true to show search hints

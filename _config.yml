@@ -30,7 +30,6 @@ paginate: 10
 
 # Plugins - Integrated with new Gemfile additions
 plugins:
-  - jekyll-remote-theme
   - jekyll-feed
   - jekyll-seo-tag
   - jekyll-paginate

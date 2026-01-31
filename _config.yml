@@ -28,8 +28,8 @@ description: >-
 
 # Fill in your protocol & hostname (E.g. 'https://username.github.io')
 # If you are using a subpath, include it in baseurl below
-url: "https://aitsatech.github.io"
-baseurl: "/ai-news-agent" # Use your repo name here 
+baseurl: "/ai-news-agent" # Does this match your GitHub repo name?
+url: "https://yourusername.github.io"
 
 github:
   username: your_github_username # CHANGE THIS

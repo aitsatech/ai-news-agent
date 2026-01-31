@@ -21,19 +21,26 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0 # Fetch all history for last modified dates
+          fetch-depth: 0
 
       - name: Setup Ruby
         uses: ruby/setup-ruby@v1
         with:
-          ruby-version: '3.3' # Matches your current environment
-          bundler-cache: true # Automatically runs 'bundle install' and caches gems
+          ruby-version: '3.3'
+          bundler-cache: true
+
+      # This ensures the Linux runner can read your Gemfile.lock even if created on Windows
+      - name: Bundle Platform Fix
+        run: |
+          bundle lock --add-platform x86_64-linux
 
       - name: Setup Pages
+        id: pages
         uses: actions/configure-pages@v4
 
       - name: Build with Jekyll
-        run: bundle exec jekyll build -d _site${{ steps.pages.outputs.base_path }}
+        # Fixed the spacing and ensured the output path is quoted
+        run: bundle exec jekyll build -d "_site${{ steps.pages.outputs.base_path }}"
         env:
           JEKYLL_ENV: production
 

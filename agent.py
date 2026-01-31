@@ -3,6 +3,8 @@ import requests
 import random
 import datetime
 import re
+from PIL import Image
+from io import BytesIO
 from typing import TypedDict, List
 from langgraph.graph import StateGraph, END
 from langchain_groq import ChatGroq
@@ -10,6 +12,7 @@ from langchain_community.tools import DuckDuckGoSearchRun
 from google import genai
 from google.genai import types
 
+# Initialize Gemini Client for Nano Banana
 api_key = os.getenv("GEMINI_API_KEY")
 client = genai.Client(api_key=api_key)
 
@@ -45,12 +48,10 @@ def researcher_node(state: AgentState):
 
 def architect_node(state: AgentState):
     print("📐 Architect: Planning high-impact structure...")
-    # FIX: Explicitly told NOT to include "H2" labels in the output
     prompt = (
         f"Create a 4-section outline for '{state['topic']}'. "
         "Return ONLY the titles, one per line. Do NOT include labels like 'H2', 'Section', or numbers."
     )
-    # Filter out any lingering "H2" or section labels
     raw_sections = llm_strategy.invoke(prompt).content.split('\n')
     sections = [re.sub(r'^(H2|Section|Step)\s*:?\s*', '', s, flags=re.I).strip() for s in raw_sections if len(s.strip()) > 5]
     return {"outline": sections[:4]}
@@ -58,7 +59,6 @@ def architect_node(state: AgentState):
 def writer_node(state: AgentState):
     current_section = state['outline'][state['iteration']]
     print(f"✍️ Writer: Drafting {current_section}...")
-    # FIX: Instructing writer NOT to repeat the title to avoid duplication
     prompt = f"""Write a section for: {current_section}. 
     Research: {state['research']}. 
     RULES: 
@@ -68,8 +68,6 @@ def writer_node(state: AgentState):
     4. Use 1 bulleted list."""
     
     res = llm_writer.invoke(prompt).content.strip()
-    
-    # Manually adding the header here ensures clean formatting without duplication
     section_md = f"\n\n## {current_section}\n\n{res}"
     return {"content": state['content'] + section_md, "iteration": state['iteration'] + 1}
 
@@ -80,11 +78,39 @@ def aio_editor_node(state: AgentState):
     return {"content": "> ### Key Takeaways\n>\n" + box + "\n\n" + state['content']}
 
 def designer_node(state: AgentState):
-    print("🎨 Designer: Generating custom header image...")
-    img_prompt = state['topic'].replace(" ", "-")[:50]
-    image_url = f"https://image.pollinations.ai/prompt/{img_prompt}?width=1280&height=720&nologo=true&seed={random.randint(1,999)}"
-    image_md = f"![Header Image]({image_url})\n\n"
-    return {"content": image_md + state['content'], "image_url": image_url}
+    print("🎨 Designer: Generating high-fidelity header with Nano Banana...")
+    
+    # Advanced prompt for Nano Banana
+    img_prompt = (
+        f"A cinematic, high-quality professional header image for a news article about {state['topic']}. "
+        "Style: Futuristic digital art, clean, 8k resolution, vibrant lighting. No messy text."
+    )
+    
+    # Call Nano Banana (Gemini 2.5 Flash Image)
+    response = client.models.generate_content(
+        model="gemini-2.5-flash-image",
+        contents=[img_prompt],
+        config=types.GenerateContentConfig(
+            image_config=types.ImageConfig(aspect_ratio="16:9")
+        )
+    )
+
+    # Save image locally
+    os.makedirs("assets/img", exist_ok=True)
+    today_slug = datetime.datetime.now().strftime("%Y%m%d")
+    random_id = random.randint(100, 999)
+    img_filename = f"header-{today_slug}-{random_id}.png"
+    img_path = f"assets/img/{img_filename}"
+    
+    for part in response.parts:
+        if part.inline_data:
+            image = Image.open(BytesIO(part.inline_data.data))
+            image.save(img_path)
+    
+    # Create the markdown link pointing to the local assets folder
+    image_md = f"![Header Image](/{img_path})\n\n"
+    
+    return {"content": image_md + state['content'], "image_url": img_path}
 
 # --- GRAPH LOGIC ---
 
@@ -125,20 +151,8 @@ if __name__ == "__main__":
     
     os.makedirs("_posts", exist_ok=True)
     
-    # FINAL CLEANUP: Ensure no "H2" tags or triple headers exist in the final string
-    clean_content = final_state['content'].replace("## H2", "##")
-    clean_content = re.sub(r'\n{3,}', '\n\n', clean_content) # Clean up extra newlines
+    # FINAL CLEANUP: Double check for any labels and extra lines
+    clean_content = final_state['content'].replace("## H2", "##").replace("H2 ", "")
+    clean_content = re.sub(r'\n{3,}', '\n\n', clean_content) 
     
     front_matter = f"""---
-layout: post
-title: "{final_state['topic']}"
-date: {today} 12:00:00 +0200
-categories: [AI, News]
-tags: [ai, robotics, future]
----
-
-"""
-    with open(filename, "w") as f:
-        f.write(front_matter + clean_content)
-    
-    print(f"✅ Success: Published {filename}")

@@ -5,3 +5,4 @@ langchain-groq
 langchain-community
 duckduckgo-search
 requests
+ddgs

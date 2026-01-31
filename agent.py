@@ -84,6 +84,10 @@ def designer_node(state: AgentState):
     img_filename = f"header-{safe_topic}-{random.randint(100,999)}.png"
     img_path = f"assets/img/{img_filename}"
     
+    # Random keywords for variety in fallbacks
+    tech_keywords = ["robotics", "cyberpunk", "artificial-intelligence", "quantum-computing", "biotech", "future-tech"]
+    selected_keyword = random.choice(tech_keywords)
+    
     # --- TIER 1: GEMINI NANO BANANA ---
     try:
         img_prompt = f"A futuristic professional header for: {state['topic']}."
@@ -92,7 +96,6 @@ def designer_node(state: AgentState):
             contents=[img_prompt],
             config=types.GenerateContentConfig(image_config=types.ImageConfig(aspect_ratio="16:9"))
         )
-        # We handle image saving without PIL by writing the raw bytes
         for part in response.parts:
             if part.inline_data:
                 with open(img_path, "wb") as f:
@@ -101,20 +104,21 @@ def designer_node(state: AgentState):
         
     except Exception as e:
         print(f"⚠️ Tier 1 Failed: {e}")
-        # --- TIER 2: UNSPLASH FALLBACK ---
+        # --- TIER 2: RANDOMIZED UNSPLASH FALLBACK ---
         try:
-            print("🌐 Attempting Tier 2: Unsplash fallback...")
-            fallback_url = "https://images.unsplash.com/photo-1485827404703-89b55fcc595e?auto=format&fit=crop&q=80&w=1200"
-            resp = requests.get(fallback_url, timeout=10)
+            print(f"🌐 Attempting Tier 2: Random Unsplash ({selected_keyword})...")
+            # Using the source URL with a keyword ensures a different image each time
+            fallback_url = f"https://source.unsplash.com/featured/1200x675?{selected_keyword}"
+            resp = requests.get(fallback_url, timeout=15)
             with open(img_path, "wb") as f:
                 f.write(resp.content)
-            print("✨ Success: Unsplash image saved.")
+            print("✨ Success: Random Unsplash image saved.")
         except Exception as e2:
             print(f"⚠️ Tier 2 Failed: {e2}")
-            # --- TIER 3: STATIC URL (NO LOCAL DRAWING) ---
-            print("🔗 Attempting Tier 3: Static fallback URL...")
-            # If everything else fails, we just point to a high-quality robot image online
-            image_md = f"![Header Image](https://images.unsplash.com/photo-1677442136019-21780ecad995?w=1200)\n\n"
+            # --- TIER 3: STATIC CDN REDIRECT ---
+            print("🔗 Attempting Tier 3: Direct CDN link...")
+            # We use a specific ID but append a random string to force some variation
+            image_md = f"![Header Image](https://images.unsplash.com/photo-1620712943543-bcc4628c6bb5?auto=format&fit=crop&q=80&w=1200&sig={random.randint(1,1000)})\n\n"
             return {"content": image_md + state['content'], "image_url": ""}
 
     image_md = f"![Header Image](/{img_path})\n\n"

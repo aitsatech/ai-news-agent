@@ -1,0 +1,40 @@
+name: Daily News Publisher
+
+on:
+  schedule:
+    # 05:15 UTC is 07:15 AM South African Time
+    - cron: '15 5 * * *'
+  workflow_dispatch: # Allows you to run it manually for testing
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # Crucial: Allows the agent to save the .md file
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          pip install -U ddgs langchain-groq langchain-community langgraph pillow google-genai
+
+      - name: Run News Agent
+        env:
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: python agent.py
+
+      - name: Commit and Push Article
+        run: |
+          git config --global user.name "GitHub Action"
+          git config --global user.email "action@github.com"
+          git add .
+          git commit -m "New article: $(date +'%Y-%m-%d')" || exit 0
+          git push

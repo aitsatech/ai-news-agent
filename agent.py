@@ -51,7 +51,6 @@ def architect_node(state: AgentState):
         "Return ONLY the titles, one per line. No labels like 'H2' or 'Section'."
     )
     raw_sections = llm_strategy.invoke(prompt).content.split('\n')
-    # Cleanup to prevent "H2: Title" issues
     sections = [re.sub(r'^(H2|Section|Step|Title|Header|[0-9]\.)\s*:?\s*', '', s, flags=re.I).strip() 
                 for s in raw_sections if len(s.strip()) > 5]
     return {"outline": sections[:4]}
@@ -84,7 +83,6 @@ def designer_node(state: AgentState):
     img_filename = f"header-{safe_topic}-{random.randint(100,999)}.png"
     img_path = f"assets/img/{img_filename}"
     
-    # 20 Diverse Tech Keywords for variety
     keywords = [
         "robotics", "cyberpunk", "biotech", "quantum-computing", "artificial-intelligence",
         "neural-networks", "microchips", "futuristic-city", "digital-human", "automation",
@@ -94,7 +92,6 @@ def designer_node(state: AgentState):
     selected_keyword = random.choice(keywords)
     random_seed = random.randint(1, 5000)
     
-    # --- TIER 1: GEMINI NANO BANANA ---
     try:
         img_prompt = f"A high-tech professional cinematic header for: {state['topic']}."
         response = client.models.generate_content(
@@ -110,10 +107,8 @@ def designer_node(state: AgentState):
         
     except Exception as e:
         print(f"⚠️ Tier 1 Failed: {e}")
-        # --- TIER 2: RANDOMIZED UNSPLASH FALLBACK ---
         try:
             print(f"🌐 Attempting Tier 2: Random Unsplash ({selected_keyword})...")
-            # We add the 'sig' parameter to force Unsplash to give a new image every time
             fallback_url = f"https://source.unsplash.com/featured/1200x675?{selected_keyword}&sig={random_seed}"
             resp = requests.get(fallback_url, timeout=15)
             with open(img_path, "wb") as f:
@@ -121,9 +116,6 @@ def designer_node(state: AgentState):
             print("✨ Success: Random Unsplash image saved.")
         except Exception as e2:
             print(f"⚠️ Tier 2 Failed: {e2}")
-            # --- TIER 3: STATIC CDN WITH CACHE BUSTING ---
-            print("🔗 Attempting Tier 3: Direct CDN link...")
-            # Using a varied source even at Tier 3
             image_md = f"![Header Image](https://images.unsplash.com/photo-1485827404703-89b55fcc595e?auto=format&fit=crop&q=80&w=1200&sig={random_seed})\n\n"
             return {"content": image_md + state['content'], "image_url": ""}
 
@@ -155,15 +147,26 @@ app = workflow.compile()
 # --- PUBLISHING ---
 if __name__ == "__main__":
     FIELD = "Artificial Intelligence and Robotics"
-    final_state = app.invoke({"field": FIELD, "topic": "", "content": "", "iteration": 0, "research": ""})
+    # Added missing keys to initial state
+    final_state = app.invoke({
+        "field": FIELD, 
+        "topic": "", 
+        "content": "", 
+        "iteration": 0, 
+        "research": "",
+        "outline": [],
+        "image_url": ""
+    })
     
     today = datetime.datetime.now().strftime("%Y-%m-%d")
     slug = re.sub(r'[^a-z0-9]', '-', final_state['topic'].lower())[:40].strip("-")
     filename = f"_posts/{today}-{slug}.md"
     
-    # H2 FIX: Remove tags and duplicate lines
+    # H2 and Duplicate Line Fix
     clean_content = final_state['content']
     clean_content = clean_content.replace("## H2", "##").replace("H2 ", "").replace("## ##", "##")
+    # Extra safety: remove the topic if it appears as a large header at the very top
+    clean_content = re.sub(rf'^# {re.escape(final_state["topic"])}\n+', '', clean_content, flags=re.I)
     clean_content = re.sub(r'\n{3,}', '\n\n', clean_content)
     
     fm = f"---\nlayout: post\ntitle: \"{final_state['topic']}\"\ndate: {today} 12:00:00 +0200\ncategories: [AI]\n---\n\n"

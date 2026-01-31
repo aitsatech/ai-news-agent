@@ -13,16 +13,14 @@ reading_time: true
 url: "https://aitsatech.github.io"
 baseurl: "/ai-news-agent"
 
-# Theme Settings
+# 1. Tell Jekyll which theme to use
 remote_theme: cotes2020/jekyll-theme-chirpy
 
-# Essential Plugins
+# 2. Tell Jekyll to use the 'remote-theme' plugin to fetch it
 plugins:
+  - jekyll-remote-theme
   - jekyll-feed
   - jekyll-seo-tag
-  - jekyll-sitemap
-  - jekyll-paginate
-  - jekyll-include-cache
 
 lang: en
 timezone: Africa/Johannesburg

@@ -20,21 +20,36 @@ author:
   name: AI Editorial Bot
   email: example@domain.com
   github: aitsatech
-  twitter: twitter_username # Added for SEO-tag metadata
-  # avatar: "/assets/img/avatar.png" # Path to your sidebar image
+  twitter: twitter_username
+  # avatar: "/assets/img/avatar.png"
 
 # Deployment Settings
 future: true
 reading_time: true
 paginate: 10
 
-# Plugins - Chirpy specific requirements
+# Plugins - Integrated with new Gemfile additions
 plugins:
   - jekyll-remote-theme
   - jekyll-feed
   - jekyll-seo-tag
   - jekyll-paginate
   - jekyll-sitemap
+  - jekyll-include-cache
+  - jekyll-archives        # Required for Chirpy tag/category pages
+  - jekyll-redirect-from   # Handles URL management
+  - jekyll-twitter-plugin  # Enables Liquid twitter tags
+
+# Chirpy Archive Settings
+# This block tells the archives plugin how to name and place tag/category pages
+jekyll-archives:
+  enabled: [categories, tags]
+  layouts:
+    category: category
+    tag: tag
+  permalinks:
+    category: /categories/:name/
+    tag: /tags/:name/
 
 # Markdown & Syntax Highlighting
 kramdown:
@@ -69,7 +84,7 @@ defaults:
       layout: page
       permalink: /:title/
 
-# SEO & Search (Recommended for AIO/SEO optimization)
+# SEO & Search
 google_site_verification:  # Add your code here
 # analytics:
 #   google:

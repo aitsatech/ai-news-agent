@@ -9,57 +9,61 @@ from langchain_community.tools import DuckDuckGoSearchRun
 
 # 1. Define the Shared State
 class AgentState(TypedDict):
-    field: str        # The broad area of interest
-    topic: str        # The specific trending story selected
-    research: str     # Collected data
-    outline: List[str]# Section titles
-    content: str      # The growing markdown body
-    iteration: int    # Progress tracker
-    image_url: str    # The final image link
+    field: str
+    topic: str
+    research: str
+    outline: List[str]
+    content: str
+    iteration: int
+    image_url: str
 
-# 2. Setup Models & Search
-llm = ChatGroq(model_name="llama-3.3-70b-versatile", temperature=0.3)
+# 2. Setup Models
+# Use 70b for strategy, 8b for the heavy writing to avoid Rate Limits (429 errors)
+llm_strategy = ChatGroq(model_name="llama-3.3-70b-versatile", temperature=0.3)
+llm_writer = ChatGroq(model_name="llama3-8b-8192", temperature=0.5)
 search = DuckDuckGoSearchRun()
 
 # --- TASK FORCE NODES ---
 
 def trend_scout_node(state: AgentState):
-    print(f"📡 Trend Scout: Finding viral breakthroughs in {state['field']}...")
-    news = search.run(f"latest trending breakthroughs and news in {state['field']} 2026")
+    print(f"📡 Trend Scout: Finding viral breakthroughs...")
+    news = search.run(f"latest trending breakthroughs in {state['field']} 2026")
     prompt = f"Based on this news: {news}\nPick the SINGLE most viral story for a deep-dive. Return ONLY the title."
-    topic = llm.invoke(prompt).content.strip().replace('"', '')
+    topic = llm_strategy.invoke(prompt).content.strip().replace('"', '')
     print(f"🎯 Selected Topic: {topic}")
     return {"topic": topic}
 
 def researcher_node(state: AgentState):
     print(f"🕵️ Researcher: Deep-diving into '{state['topic']}'...")
-    data = search.run(f"{state['topic']} technical details and expert analysis 2026")
+    data = search.run(f"{state['topic']} technical details 2026")
     return {"research": data}
 
 def architect_node(state: AgentState):
-    print("📐 Architect: Planning 2,000-word structure...")
-    prompt = f"Create a 6-section H2 outline for '{state['topic']}' using research: {state['research']}. Return ONLY titles, one per line."
-    sections = [s.strip() for s in llm.invoke(prompt).content.split('\n') if len(s.strip()) > 5]
+    print("📐 Architect: Planning high-impact structure...")
+    # Reduced to 4 sections to save tokens and ensure completion
+    prompt = f"Create a 4-section H2 outline for '{state['topic']}'. Return ONLY titles, one per line."
+    sections = [s.strip() for s in llm_strategy.invoke(prompt).content.split('\n') if len(s.strip()) > 5][:4]
     return {"outline": sections}
 
 def writer_node(state: AgentState):
     current_section = state['outline'][state['iteration']]
     print(f"✍️ Writer: Drafting {current_section}...")
     prompt = f"""Write a section for: {current_section}. 
-    RULES: Answer-First (start with bold answer), short paragraphs (max 3 sentences), use bullet points.
-    Research: {state['research']}. Length: 400 words."""
-    res = llm.invoke(prompt).content
+    Research: {state['research']}. 
+    RULES: Bold the first sentence. Max 250 words. Use 1 bulleted list."""
+    res = llm_writer.invoke(prompt).content
     return {"content": state['content'] + f"\n\n## {current_section}\n" + res, "iteration": state['iteration'] + 1}
 
 def aio_editor_node(state: AgentState):
     print("📋 AIO Editor: Drafting the 'Key Takeaways' box...")
-    prompt = f"Create a Markdown blockquote (>) with 3 bullet points summarizing: {state['content'][:1500]}."
-    box = llm.invoke(prompt).content
-    return {"content": box + "\n\n" + state['content']}
+    prompt = f"Summarize this in 3 bullet points: {state['content'][:1000]}."
+    box = llm_strategy.invoke(prompt).content
+    return {"content": "> ### Key Takeaways\n>\n" + box + "\n\n" + state['content']}
 
 def designer_node(state: AgentState):
     print("🎨 Designer: Generating custom header image...")
-    img_prompt = llm.invoke(f"Short 10-word art prompt for: {state['topic']}").content.replace(" ", "-")
+    # Simplified prompt generation
+    img_prompt = state['topic'].replace(" ", "-")[:50]
     image_url = f"https://image.pollinations.ai/prompt/{img_prompt}?width=1280&height=720&nologo=true&seed={random.randint(1,999)}"
     image_md = f"![Header Image]({image_url})\n\n"
     return {"content": image_md + state['content'], "image_url": image_url}
@@ -67,7 +71,6 @@ def designer_node(state: AgentState):
 # --- GRAPH LOGIC ---
 
 workflow = StateGraph(AgentState)
-
 workflow.add_node("scout", trend_scout_node)
 workflow.add_node("researcher", researcher_node)
 workflow.add_node("architect", architect_node)
@@ -95,20 +98,23 @@ if __name__ == "__main__":
     FIELD = "Artificial Intelligence and Robotics"
     print(f"🚀 Launching Newsroom for: {FIELD}")
     
-    final_state = app.invoke({"field": FIELD, "topic": "", "content": "", "iteration": 0})
+    final_state = app.invoke({"field": FIELD, "topic": "", "content": "", "iteration": 0, "research": ""})
     
-    # Format for Jekyll
     today = datetime.datetime.now().strftime("%Y-%m-%d")
-    slug = final_state['topic'].lower().replace(" ", "-").replace(":", "")
+    # Clean the slug for the filename
+    clean_topic = "".join(c for c in final_state['topic'] if c.isalnum() or c==' ').strip()
+    slug = clean_topic.lower().replace(" ", "-")
     filename = f"_posts/{today}-{slug}.md"
     
     os.makedirs("_posts", exist_ok=True)
     
+    # Updated Front Matter for Chirpy
     front_matter = f"""---
 layout: post
 title: "{final_state['topic']}"
-date: {today}
-categories: AI News
+date: {today} 12:00:00 +0200
+categories: [AI, News]
+tags: [ai, robotics, future]
 ---
 
 """

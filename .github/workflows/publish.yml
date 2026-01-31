@@ -23,7 +23,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install -U pip
+          python -m pip install --upgrade pip
           pip install -U ddgs langchain-groq langchain-community langgraph google-genai requests Pillow curl_cffi
           
       - name: Run News Agent

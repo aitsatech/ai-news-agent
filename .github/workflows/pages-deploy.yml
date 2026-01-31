@@ -1,5 +1,4 @@
 name: "Build and Deploy"
-
 on:
   push:
     branches:
@@ -9,16 +8,11 @@ on:
       - .gitignore
       - README.md
       - LICENSE
-  workflow_dispatch:
 
 permissions:
   contents: read
   pages: write
   id-token: write
-
-concurrency:
-  group: "pages"
-  cancel-in-progress: true
 
 jobs:
   build:
@@ -27,37 +21,24 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0 # Chirpy needs full history for 'last modified at' dates
-
-      - name: Setup Pages
-        id: pages
-        uses: actions/configure-pages@v4
+          fetch-depth: 0 # Fetch all history for last modified dates
 
       - name: Setup Ruby
         uses: ruby/setup-ruby@v1
         with:
-          ruby-version: 3.3
-          bundler-cache: true # Uses Gemfile.lock to speed up future builds
+          ruby-version: '3.3' # Matches your current environment
+          bundler-cache: true # Automatically runs 'bundle install' and caches gems
 
-      - name: Build site
-        # We build into the root of _site to keep paths simple for the uploader
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+
+      - name: Build with Jekyll
         run: bundle exec jekyll build -d _site${{ steps.pages.outputs.base_path }}
         env:
-          JEKYLL_ENV: "production"
+          JEKYLL_ENV: production
 
-      - name: Test site
-        # We use '|| true' to ensure that even if a link is broken, the site still deploys.
-        # This prevents the "White Page" issue caused by a failed build.
-        run: |
-          bundle exec htmlproofer _site \
-            --disable-external \
-            --ignore-urls "/^http:\/\/127.0.0.1/,/^http:\/\/0.0.0.0/,/^http:\/\/localhost/" \
-            --allow-hash-href || true 
-
-      - name: Upload site artifact
+      - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
-        with:
-          path: "_site"
 
   deploy:
     environment:

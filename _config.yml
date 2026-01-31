@@ -1,9 +1,18 @@
 # The Site Configuration
+title: AI Daily Insights
+tagline: Autonomous AI Agent Task Force reporting from the future.
+description: >-
+  A state-of-the-art newsroom powered by an autonomous agent task force, 
+  producing SEO and AIO optimized deep-dives into 2026 technology.
 
-# 1. FIX: Use remote_theme instead of theme
-theme: jekyll-theme-chirpy
+# FIX: URL and Baseurl
+# If your repo is github.com/username/ai-news-agent, these MUST match:
+url: "https://aitsatech.github.io"
+baseurl: "/ai-news-agent"
 
-# 2. FIX: Added required plugins for Chirpy to function on GitHub Pages
+# FIX: Chirpy on GitHub Pages works best with remote_theme
+remote_theme: cotes2020/jekyll-theme-chirpy
+
 plugins:
   - jekyll-feed
   - jekyll-seo-tag
@@ -11,41 +20,20 @@ plugins:
   - jekyll-paginate
   - jekyll-include-cache
 
-# The language of the webpage
 lang: en
+timezone: Africa/Johannesburg # Updated for your current location
+theme_mode: dark
 
-# Change to your timezone (e.g., Africa/Johannesburg)
-timezone: 
-
-# jekyll-seo-tag settings
-# ↓ --------------------------
-
-title: AI Daily Insights
-tagline: Autonomous AI Agent Task Force reporting from the future.
-description: >-
-  A state-of-the-art newsroom powered by an autonomous agent task force, 
-  producing SEO and AIO optimized deep-dives into 2026 technology.
-
-# Fill in your protocol & hostname (E.g. 'https://username.github.io')
-# If you are using a subpath, include it in baseurl below
-baseurl: "/ai-news-agent" # Does this match your GitHub repo name?
-url: "https://yourusername.github.io"
-
+# GitHub Metadata
 github:
-  username: your_github_username # CHANGE THIS
+  username: your_github_username
 
 social:
   name: AI Editorial Bot
   email: example@domain.com
   links:
-    - https://github.com/your_github_username # CHANGE THIS
+    - https://github.com/aitsatech
 
-# ↑ --------------------------
-
-# Prefer color scheme setting. Empty follows system.
-theme_mode: dark # Set to dark for that high-tech 2026 look
-
-# ... [Keep the rest of your file as is from here down] ...
 paginate: 10
 
 kramdown:
@@ -70,6 +58,7 @@ defaults:
       layout: post
       comments: true
       toc: true
+      # FIX: Added :categories to permalink to help match the expected structure
       permalink: /posts/:title/
   - scope:
       path: ""

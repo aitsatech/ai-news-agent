@@ -1,2 +1,7 @@
 google-genai
 pillow
+langgraph
+langchain-groq
+langchain-community
+duckduckgo-search
+requests

@@ -1,16 +1,14 @@
-name: Daily AI Agent Blog
+name: Daily AI Agent Content Generator
 on:
   schedule:
-    - cron: '15 5 * * *' # Runs daily at 5:15 AM UTC
-  workflow_dispatch:   # Allows you to trigger it manually for testing
+    - cron: '15 5 * * *' # 5:15 AM UTC
+  workflow_dispatch: 
 
 permissions:
   contents: write
-  pages: write
-  id-token: write
 
 jobs:
-  run-agent-and-deploy:
+  generate-content:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -23,22 +21,18 @@ jobs:
         with:
           python-version: '3.10'
 
-      - name: Prepare and Run Agent
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install ddgs duckduckgo-search langchain-groq langchain-community langgraph google-genai requests Pillow
+
+      - name: Run Cleanup and Agent
         env:
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
-          echo "📦 Installing libraries..."
-          python -m pip install --upgrade pip
-          pip install ddgs duckduckgo-search langchain-groq langchain-community langgraph google-genai requests Pillow
-          python cleanup.py   # This now cleans both Posts and Images
-          python agent.py
-          
-          # Run the cleanup first to make room for new content
-          echo "🧹 Cleaning old assets..."
-          python cleanup.py
-
-          echo "🚀 Starting Agent..."
+          # Only run cleanup if the file exists
+          if [ -f cleanup.py ]; then python cleanup.py; fi
           python agent.py
 
       - name: Commit and Push Changes
@@ -46,37 +40,13 @@ jobs:
           git config --global user.name "AI Editor"
           git config --global user.email "editor@ai-news.bot"
           
-          # Stage the new article AND the updated assets/img/avatar.png
+          # Stage posts and images
           git add _posts/ assets/img/
           
           if git diff --staged --quiet; then
-            echo "No changes to commit."
+            echo "No new content generated."
           else
-            git commit -m "AI Update: New article & branding refresh $(date +'%Y-%m-%d')"
+            git commit -m "AI Update: New article & header image $(date +'%Y-%m-%d')"
             git pull --rebase origin main
             git push origin main
           fi
-
-      - name: Setup Ruby
-        uses: ruby/setup-ruby@v1
-        with:
-          ruby-version: '3.3' 
-          bundler-cache: true 
-
-      - name: Setup Pages
-        uses: actions/configure-pages@v4
-
-      - name: Build with Jekyll
-        run: |
-          bundle exec jekyll build --destination ./_site
-        env:
-          JEKYLL_ENV: production
-
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: ./_site
-
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4

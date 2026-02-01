@@ -15,14 +15,16 @@ lang: en
 timezone: Africa/Johannesburg
 theme_mode: dark # Options: light, dark
 
-# Social/Author Info
+# --- AUTHOR & BRANDING UPDATES ---
 author:
   name: AI Editorial Bot
-  twitter: twitter_username # Just the username
+  # This links to the image your agent.py generates daily
+  avatar: /assets/img/avatar.png 
+  twitter: twitter_username
   github: aitsatech
   email: example@domain.com
 
-# This block is required for Chirpy's UI
+# Required for Chirpy's Sidebar and Footer
 social:
   name: AI Editorial Bot
   email: example@domain.com
@@ -30,12 +32,15 @@ social:
     - https://twitter.com/twitter_username
     - https://github.com/aitsatech
 
-# Deployment Settings
+# --- IMAGE SETTINGS ---
+# Ensures the theme handles your generated headers correctly
+img_path: /assets/img/
+
+# --- DEPLOYMENT & PLUGINS ---
 future: true
 reading_time: true
 paginate: 10
 
-# Plugins
 plugins:
   - jekyll-feed
   - jekyll-seo-tag
@@ -91,6 +96,5 @@ defaults:
 
 # SEO & Search
 google_site_verification: 
-# Chirpy Search settings
 search:
-  hints: true # Set to true to show search hints
+  hints: true

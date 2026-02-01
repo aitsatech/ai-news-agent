@@ -32,7 +32,7 @@ jobs:
           python -m pip install --upgrade pip
           
           # Added 'ddgs' explicitly to satisfy the LangChain ImportError
-          pip install ddgs duckduckgo-search langchain-groq langchain-community langgraph google-genai requests
+          pip install ddgs duckduckgo-search langchain-groq langchain-community langgraph google-genai requests Pillow
           
           echo "🧹 Cleaning old posts..."
           if [ -f cleanup.py ]; then python cleanup.py; fi

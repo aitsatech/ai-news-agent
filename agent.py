@@ -169,9 +169,11 @@ if __name__ == "__main__":
     # 2. PERMANENT DUPLICATE LINE FIX: Collapse whitespace
     clean_content = re.sub(r'\n{3,}', '\n\n', clean_content).strip()
     
-    # --- CHIRPY BANNER FRONT MATTER ---
+    # --- CHIRPY BANNER FRONT MATTER FIX ---
+    # This is the part that was missing in your last run
     image_meta = ""
-    if final_state['image_url']:
+    if final_state.get('image_url'):
+        # We ensure the path is absolute from the site root for Chirpy
         image_meta = f"image:\n  path: /assets/img/{final_state['image_url']}\n  alt: \"{final_state['topic']}\""
 
     fm = f"""---
@@ -183,7 +185,10 @@ categories: [AI]
 ---
 
 """
+    # Create directory if it doesn't exist
+    os.makedirs("_posts", exist_ok=True)
+    
     with open(filename, "w", encoding="utf-8") as f:
         f.write(fm + clean_content)
     
-    print(f"✅ Success: Published {filename}")
+    print(f"✅ Success: Published {filename} with banner metadata.")

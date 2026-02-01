@@ -2,11 +2,9 @@
 title: AI Daily Insights
 tagline: Autonomous AI Agent Task Force reporting from the future.
 description: >-
-  A state-of-the-art newsroom powered by an autonomous agent task force, 
-  producing SEO and AIO optimized deep-dives into 2026 technology.
+  A state-of-the-art newsroom powered by an autonomous agent task force.
 
 # --- URL SETTINGS ---
-# Crucial for GitHub Pages subfolders
 url: "https://aitsatech.github.io"
 baseurl: "/ai-news-agent"
 
@@ -14,29 +12,20 @@ baseurl: "/ai-news-agent"
 theme: jekyll-theme-chirpy
 lang: en
 timezone: Africa/Johannesburg
-theme_mode: dark # Options: light, dark
+theme_mode: dark
 
 # --- AUTHOR & BRANDING ---
 author:
   name: AI Editorial Bot
-  # Removed leading slash to allow Jekyll to prepend baseurl automatically
-  avatar: assets/img/avatar.png 
+  # Relative to site root
+  avatar: /assets/img/avatar.png 
   twitter: twitter_username
   github: aitsatech
   email: example@domain.com
 
-# Required for Chirpy's Sidebar and Footer
-social:
-  name: AI Editorial Bot
-  email: example@domain.com
-  links:
-    - https://twitter.com/twitter_username
-    - https://github.com/aitsatech
-
-# --- IMAGE SETTINGS (THE FIX) ---
-# This ensures that ![Image](filename.png) in your posts 
-# resolves to https://aitsatech.github.io/ai-news-agent/assets/img/filename.png
-img_path: /ai-news-agent/assets/img/
+# --- IMAGE SETTINGS ---
+# We keep this simple to ensure the Front Matter 'path' resolves correctly
+img_path: /ai-news-agent
 
 # --- DEPLOYMENT & PLUGINS ---
 future: true
@@ -51,27 +40,6 @@ plugins:
   - jekyll-include-cache
   - jekyll-archives
   - jekyll-redirect-from
-  - jekyll-twitter-plugin
-
-# Chirpy Archive Settings
-jekyll-archives:
-  enabled: [categories, tags]
-  layouts:
-    category: category
-    tag: tag
-  permalinks:
-    category: /categories/:name/
-    tag: /tags/:name/
-
-# Markdown & Syntax Highlighting
-kramdown:
-  footnote_backlink: "&#8617;&#xfe0e;"
-  syntax_highlighter: rouge
-  syntax_highlighter_opts:
-    css_class: highlight
-    block:
-      line_numbers: true
-      start_line: 1
 
 # Collections
 collections:
@@ -79,7 +47,7 @@ collections:
     output: true
     sort_by: order
 
-# Defaults for Posts and Pages
+# Defaults for Posts
 defaults:
   - scope:
       path: ""
@@ -88,16 +56,4 @@ defaults:
       layout: post
       comments: true
       toc: true
-      # Standard Chirpy permalink structure
       permalink: /posts/:title/
-  - scope:
-      path: ""
-      type: tabs
-    values:
-      layout: page
-      permalink: /:title/
-
-# SEO & Search
-google_site_verification: 
-search:
-  hints: true

@@ -120,11 +120,10 @@ def designer_node(state: AgentState):
             image = response.generated_images[0]
             with open(img_path, "wb") as f:
                 f.write(image.image_bytes)
-            # FIXED SYNTAX HERE:
             print(f"✨ Success: Gemini generated header: {img_filename}")
             
-            image_markdown = f"![Header Image]({img_filename})\n\n"
-            return {"content": image_markdown + state['content'], "image_url": img_path}
+            # Pass only the filename; we will move this to Front Matter in the publishing step
+            return {"content": state['content'], "image_url": img_filename}
                 
     except Exception as e:
         print(f"⚠️ Image Generation Failed: {e}")
@@ -167,17 +166,14 @@ if __name__ == "__main__":
     slug = re.sub(r'[^a-z0-9]', '-', final_state['topic'].lower())[:40].strip("-")
     filename = f"_posts/{today}-{slug}.md"
     
+    # 1. PERMANENT H2 FIX: Clean H2 tag hallucinations and duplicate headers
     clean_content = final_state['content']
-    
-    # 1. Clean H2 tag hallucinations and duplicate headers
     clean_content = re.sub(r'##\s*(H2|Header|Section|Title|Topic|Step):?\s*', '## ', clean_content, flags=re.I)
     
-    # 2. Collapse duplicate line breaks
+    # 2. PERMANENT DUPLICATE LINE FIX: Collapse duplicate line breaks
     clean_content = re.sub(r'\n{3,}', '\n\n', clean_content).strip()
     
-    fm = f"---\nlayout: post\ntitle: \"{final_state['topic']}\"\ndate: {today} 12:00:00 +0200\ncategories: [AI]\n---\n\n"
-    
-    os.makedirs("_posts", exist_ok=True)
-    with open(filename, "w", encoding="utf-8") as f:
-        f.write(fm + clean_content)
-    print(f"✅ Success: Published {filename}")
+    # --- CHIRPY BANNER FIX ---
+    # Construct the path specifically for the 'image' metadata block
+    # Note: We use the relative path starting from /assets/
+    banner_img = final_state

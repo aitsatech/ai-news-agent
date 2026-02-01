@@ -67,7 +67,6 @@ def writer_node(state: AgentState):
     4. Use 1 bulleted list."""
     
     res = llm_writer.invoke(prompt).content.strip()
-    # Use standard H2 formatting
     section_md = f"\n\n## {current_section}\n\n{res}"
     return {"content": state['content'] + section_md, "iteration": state['iteration'] + 1}
 
@@ -121,4 +120,64 @@ def designer_node(state: AgentState):
             image = response.generated_images[0]
             with open(img_path, "wb") as f:
                 f.write(image.image_bytes)
-            print(f"✨ Success: Gemini generated header:
+            # FIXED SYNTAX HERE:
+            print(f"✨ Success: Gemini generated header: {img_filename}")
+            
+            image_markdown = f"![Header Image]({img_filename})\n\n"
+            return {"content": image_markdown + state['content'], "image_url": img_path}
+                
+    except Exception as e:
+        print(f"⚠️ Image Generation Failed: {e}")
+        
+    return {"content": state['content'], "image_url": ""}
+
+# --- GRAPH ---
+workflow = StateGraph(AgentState)
+workflow.add_node("scout", trend_scout_node)
+workflow.add_node("researcher", researcher_node)
+workflow.add_node("architect", architect_node)
+workflow.add_node("writer", writer_node)
+workflow.add_node("editor", aio_editor_node)
+workflow.add_node("designer", designer_node)
+
+workflow.set_entry_point("scout")
+workflow.add_edge("scout", "researcher")
+workflow.add_edge("researcher", "architect")
+workflow.add_edge("architect", "writer")
+
+def loop_check(state):
+    return "writer" if state['iteration'] < len(state['outline']) else "editor"
+
+workflow.add_conditional_edges("writer", loop_check)
+workflow.add_edge("editor", "designer")
+workflow.add_edge("designer", END)
+app = workflow.compile()
+
+# --- PUBLISHING ---
+if __name__ == "__main__":
+    FIELD = "Artificial Intelligence and Robotics"
+    final_state = app.invoke({
+        "field": FIELD, "topic": "", "content": "", "iteration": 0, 
+        "research": "", "outline": [], "image_url": ""
+    })
+    
+    update_site_branding_avatar(final_state)
+    
+    today = datetime.datetime.now().strftime("%Y-%m-%d")
+    slug = re.sub(r'[^a-z0-9]', '-', final_state['topic'].lower())[:40].strip("-")
+    filename = f"_posts/{today}-{slug}.md"
+    
+    clean_content = final_state['content']
+    
+    # 1. Clean H2 tag hallucinations and duplicate headers
+    clean_content = re.sub(r'##\s*(H2|Header|Section|Title|Topic|Step):?\s*', '## ', clean_content, flags=re.I)
+    
+    # 2. Collapse duplicate line breaks
+    clean_content = re.sub(r'\n{3,}', '\n\n', clean_content).strip()
+    
+    fm = f"---\nlayout: post\ntitle: \"{final_state['topic']}\"\ndate: {today} 12:00:00 +0200\ncategories: [AI]\n---\n\n"
+    
+    os.makedirs("_posts", exist_ok=True)
+    with open(filename, "w", encoding="utf-8") as f:
+        f.write(fm + clean_content)
+    print(f"✅ Success: Published {filename}")

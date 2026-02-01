@@ -30,8 +30,9 @@ jobs:
         run: |
           echo "📦 Installing necessary libraries..."
           python -m pip install --upgrade pip
-          # Explicitly installing the exact packages needed for your updated agent.py
-          pip install duckduckgo-search langchain-groq langchain-community langgraph google-genai requests
+          
+          # Added 'ddgs' explicitly to satisfy the LangChain ImportError
+          pip install ddgs duckduckgo-search langchain-groq langchain-community langgraph google-genai requests
           
           echo "🧹 Cleaning old posts..."
           if [ -f cleanup.py ]; then python cleanup.py; fi

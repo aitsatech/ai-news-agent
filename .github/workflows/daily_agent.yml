@@ -26,13 +26,14 @@ jobs:
           python -m pip install --upgrade pip
           pip install ddgs duckduckgo-search langchain-groq langchain-community langgraph google-genai requests Pillow
 
-      - name: Run Cleanup and Agent
+      - name: Run Agent
         env:
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
-          # Only run cleanup if the file exists
+          # Cleanup if file exists
           if [ -f cleanup.py ]; then python cleanup.py; fi
+          # Run the main agent
           python agent.py
 
       - name: Commit and Push Changes
@@ -40,13 +41,14 @@ jobs:
           git config --global user.name "AI Editor"
           git config --global user.email "editor@ai-news.bot"
           
-          # Stage posts and images
-          git add _posts/ assets/img/
+          # Crucial: Stage everything in _posts and assets/img
+          git add _posts/*.md
+          git add assets/img/*.png
           
           if git diff --staged --quiet; then
-            echo "No new content generated."
+            echo "No changes to commit."
           else
-            git commit -m "AI Update: New article & header image $(date +'%Y-%m-%d')"
+            git commit -m "AI Update: New article & assets $(date +'%Y-%m-%d')"
             git pull --rebase origin main
             git push origin main
           fi

@@ -46,10 +46,7 @@ def researcher_node(state: AgentState):
 
 def architect_node(state: AgentState):
     print("📐 Architect: Planning high-impact structure...")
-    prompt = (
-        f"Create a 4-section outline for '{state['topic']}'. "
-        "Return ONLY the titles, one per line. No labels like 'H2' or 'Section'."
-    )
+    prompt = f"Create a 4-section outline for '{state['topic']}'. Return ONLY titles, one per line."
     raw_sections = llm_strategy.invoke(prompt).content.split('\n')
     sections = [re.sub(r'^(H2|Section|Step|Title|Header|[0-9]\.)\s*:?\s*', '', s, flags=re.I).strip() 
                 for s in raw_sections if len(s.strip()) > 5]
@@ -58,137 +55,92 @@ def architect_node(state: AgentState):
 def writer_node(state: AgentState):
     current_section = state['outline'][state['iteration']]
     print(f"✍️ Writer: Drafting {current_section}...")
-    prompt = f"""Write a section for: {current_section}. 
-    Research: {state['research']}. 
-    RULES: 
-    1. DO NOT repeat the title.
-    2. Bold the first sentence. 
-    3. Max 200 words. 
-    4. Use 1 bulleted list."""
-    
+    prompt = f"Write a section for: {current_section}. Research: {state['research']}. RULES: 1. No title repetition. 2. Bold 1st sentence. 3. Max 200 words. 4. Use 1 list."
     res = llm_writer.invoke(prompt).content.strip()
     section_md = f"\n\n## {current_section}\n\n{res}"
     return {"content": state['content'] + section_md, "iteration": state['iteration'] + 1}
 
 def aio_editor_node(state: AgentState):
-    print("📋 AIO Editor: Drafting the 'Key Takeaways' box...")
-    prompt = f"Summarize this in 3 bullet points: {state['content'][:1000]}."
+    print("📋 Editor: Finalizing content and takeaways...")
+    prompt = f"Summarize this in 3 short bullet points: {state['content'][:1000]}."
     box = llm_strategy.invoke(prompt).content
     return {"content": "> ### Key Takeaways\n>\n" + box + "\n\n" + state['content']}
-
-def update_site_branding_avatar(state: AgentState):
-    print("🎨 Branding: Updating site logo/avatar...")
-    avatar_dir = "assets/img"
-    os.makedirs(avatar_dir, exist_ok=True)
-    avatar_path = os.path.join(avatar_dir, "avatar.png")
-    avatar_prompt = "A minimalist, high-tech circular vector logo for an AI news site. 4k, clean lines, cyberpunk blue and white, no text."
-
-    try:
-        response = client.models.generate_content(
-            model="gemini-2.0-flash",
-            contents=[avatar_prompt],
-            config=types.GenerateContentConfig(image_config=types.ImageConfig(aspect_ratio="1:1"))
-        )
-        if response.generated_images:
-            image = response.generated_images[0]
-            with open(avatar_path, "wb") as f:
-                f.write(image.image_bytes)
-            print("✅ Site avatar updated.")
-    except Exception as e:
-        print(f"⚠️ Gemini Avatar Failed: {e}")
-    return state
 
 def designer_node(state: AgentState):
     print("🎨 Designer: Generating dynamic header...")
     img_dir = "assets/img"
     os.makedirs(img_dir, exist_ok=True)
-    
     safe_topic = re.sub(r'[^a-zA-Z0-9]', '-', state['topic'][:20]).lower()
     img_filename = f"header-{safe_topic}-{random.randint(100,999)}.png"
     img_path = os.path.join(img_dir, img_filename)
     
     try:
-        img_prompt = f"A wide, high-tech, cinematic 4k header image for an article about: {state['topic']}. No text, professional digital art."
+        img_prompt = f"A wide, high-tech, cinematic 4k header image for: {state['topic']}. No text."
         response = client.models.generate_content(
             model="gemini-2.0-flash",
             contents=[img_prompt],
             config=types.GenerateContentConfig(image_config=types.ImageConfig(aspect_ratio="16:9"))
         )
-        
         if response.generated_images:
-            image = response.generated_images[0]
             with open(img_path, "wb") as f:
-                f.write(image.image_bytes)
-            print(f"✨ Success: Gemini generated header: {img_filename}")
-            return {"content": state['content'], "image_url": img_filename}
-                
+                f.write(response.generated_images[0].image_bytes)
+            return {"image_url": img_filename}
     except Exception as e:
-        print(f"⚠️ Image Generation Failed: {e}")
-    return {"content": state['content'], "image_url": ""}
+        print(f"⚠️ Image Failed: {e}")
+    return {"image_url": ""}
+
+def update_site_branding_avatar(state: AgentState):
+    avatar_path = "assets/img/avatar.png"
+    if os.path.exists(avatar_path): return
+    try:
+        response = client.models.generate_content(
+            model="gemini-2.0-flash",
+            contents=["A minimalist high-tech robot avatar logo, white background"],
+            config=types.GenerateContentConfig(image_config=types.ImageConfig(aspect_ratio="1:1"))
+        )
+        with open(avatar_path, "wb") as f:
+            f.write(response.generated_images[0].image_bytes)
+    except: pass
 
 # --- GRAPH ---
 workflow = StateGraph(AgentState)
-workflow.add_node("scout", trend_scout_node)
-workflow.add_node("researcher", researcher_node)
-workflow.add_node("architect", architect_node)
-workflow.add_node("writer", writer_node)
-workflow.add_node("editor", aio_editor_node)
-workflow.add_node("designer", designer_node)
+workflow.add_node("scout", trend_scout_node); workflow.add_node("researcher", researcher_node)
+workflow.add_node("architect", architect_node); workflow.add_node("writer", writer_node)
+workflow.add_node("editor", aio_editor_node); workflow.add_node("designer", designer_node)
 
 workflow.set_entry_point("scout")
-workflow.add_edge("scout", "researcher")
-workflow.add_edge("researcher", "architect")
+workflow.add_edge("scout", "researcher"); workflow.add_edge("researcher", "architect")
 workflow.add_edge("architect", "writer")
-
-def loop_check(state):
-    return "writer" if state['iteration'] < len(state['outline']) else "editor"
-
-workflow.add_conditional_edges("writer", loop_check)
-workflow.add_edge("editor", "designer")
-workflow.add_edge("designer", END)
+workflow.add_conditional_edges("writer", lambda x: "writer" if x['iteration'] < len(x['outline']) else "editor")
+workflow.add_edge("editor", "designer"); workflow.add_edge("designer", END)
 app = workflow.compile()
 
 # --- PUBLISHING ---
 if __name__ == "__main__":
-    FIELD = "Artificial Intelligence and Robotics"
-    final_state = app.invoke({
-        "field": FIELD, "topic": "", "content": "", "iteration": 0, 
-        "research": "", "outline": [], "image_url": ""
-    })
-    
+    final_state = app.invoke({"field": "AI and Robotics", "topic": "", "research": "", "outline": [], "content": "", "iteration": 0, "image_url": ""})
     update_site_branding_avatar(final_state)
     
     today = datetime.datetime.now().strftime("%Y-%m-%d")
-    slug = re.sub(r'[^a-z0-9]', '-', final_state['topic'].lower())[:40].strip("-")
-    filename = f"_posts/{today}-{slug}.md"
+    clean_topic = final_state['topic'].replace('"', '')
+    slug = re.sub(r'[^a-z0-9]', '-', clean_topic.lower())[:40].strip("-")
     
-    # 1. PERMANENT H2 FIX: Clean H2 tag hallucinations
-    clean_content = final_state['content']
-    clean_content = re.sub(r'##\s*(H2|Header|Section|Title|Topic|Step):?\s*', '## ', clean_content, flags=re.I)
+    # Cleaning
+    content = re.sub(r'##\s*(H2|Header|Section|Title|Topic|Step):?\s*', '## ', final_state['content'], flags=re.I)
+    content = re.sub(r'\n{3,}', '\n\n', content).strip()
     
-    # 2. PERMANENT DUPLICATE LINE FIX: Collapse whitespace
-    clean_content = re.sub(r'\n{3,}', '\n\n', clean_content).strip()
-    
-    # --- CHIRPY BANNER FRONT MATTER FIX ---
-    # This is the part that was missing in your last run
     image_meta = ""
     if final_state.get('image_url'):
-        # We ensure the path is absolute from the site root for Chirpy
-        image_meta = f"image:\n  path: /assets/img/{final_state['image_url']}\n  alt: \"{final_state['topic']}\""
+        image_meta = f"image:\n  path: /assets/img/{final_state['image_url']}\n  alt: \"{clean_topic}\""
 
-    fm = f"""---
+    post_md = f"""---
 layout: post
-title: "{final_state['topic']}"
+title: "{clean_topic}"
 date: {today} 12:00:00 +0200
 categories: [AI]
 {image_meta}
 ---
 
-"""
-    # Create directory if it doesn't exist
-    os.makedirs("_posts", exist_ok=True)
-    
-    with open(filename, "w", encoding="utf-8") as f:
-        f.write(fm + clean_content)
-    
-    print(f"✅ Success: Published {filename} with banner metadata.")
+{content}"""
+
+    with open(f"_posts/{today}-{slug}.md", "w", encoding="utf-8") as f:
+        f.write(post_md)

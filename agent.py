@@ -11,7 +11,7 @@ from langchain_community.tools import DuckDuckGoSearchRun
 from google import genai
 from google.genai import types
 
-# Initialize Gemini Client (Using 2.0-flash / Nano Banana)
+# Initialize Gemini Client (Gemini 2.0 Flash)
 api_key = os.getenv("GEMINI_API_KEY")
 client = genai.Client(api_key=api_key)
 
@@ -51,7 +51,6 @@ def architect_node(state: AgentState):
         "Return ONLY the titles, one per line. No labels like 'H2' or 'Section'."
     )
     raw_sections = llm_strategy.invoke(prompt).content.split('\n')
-    # Cleanup H2 hallucinations from the outline phase itself
     sections = [re.sub(r'^(H2|Section|Step|Title|Header|[0-9]\.)\s*:?\s*', '', s, flags=re.I).strip() 
                 for s in raw_sections if len(s.strip()) > 5]
     return {"outline": sections[:4]}
@@ -68,7 +67,7 @@ def writer_node(state: AgentState):
     4. Use 1 bulleted list."""
     
     res = llm_writer.invoke(prompt).content.strip()
-    # Ensure no duplicate lines or H2 prefix here
+    # Use standard H2 formatting
     section_md = f"\n\n## {current_section}\n\n{res}"
     return {"content": state['content'] + section_md, "iteration": state['iteration'] + 1}
 
@@ -103,14 +102,12 @@ def update_site_branding_avatar(state: AgentState):
 
 def designer_node(state: AgentState):
     print("🎨 Designer: Generating dynamic header...")
-    os.makedirs("assets/img", exist_ok=True)
+    img_dir = "assets/img"
+    os.makedirs(img_dir, exist_ok=True)
+    
     safe_topic = re.sub(r'[^a-zA-Z0-9]', '-', state['topic'][:20]).lower()
     img_filename = f"header-{safe_topic}-{random.randint(100,999)}.png"
-    img_path = f"assets/img/{img_filename}"
-    
-    # Use Jekyll-friendly path (no leading slash for some configs, or use absolute logic)
-    # Removing the leading slash to ensure internal path resolution works
-    markdown_path = f"assets/img/{img_filename}"
+    img_path = os.path.join(img_dir, img_filename)
     
     try:
         img_prompt = f"A wide, high-tech, cinematic 4k header image for an article about: {state['topic']}. No text, professional digital art."
@@ -124,76 +121,4 @@ def designer_node(state: AgentState):
             image = response.generated_images[0]
             with open(img_path, "wb") as f:
                 f.write(image.image_bytes)
-            print(f"✨ Success: Gemini generated image.")
-            # FIX: Adding a newline after image to prevent text-wrap issues
-            return {"content": f"![Header Image]({markdown_path})\n\n" + state['content'], "image_url": img_path}
-                
-    except Exception as e:
-        print(f"⚠️ Tier 1 (Gemini) Failed: {e}")
-
-    # Fallback to Unsplash
-    try:
-        query = state['topic'].replace(" ", ",")
-        fallback_url = f"https://images.unsplash.com/photo-1485827404703-89b55fcc595e?auto=format&fit=crop&q=80&w=1200"
-        resp = requests.get(fallback_url, timeout=15)
-        if resp.status_code == 200:
-            with open(img_path, "wb") as f:
-                f.write(resp.content)
-            return {"content": f"![Header Image]({markdown_path})\n\n" + state['content'], "image_url": img_path}
-    except Exception as e2:
-        print(f"❌ Fallback Failed: {e2}")
-        
-    return {"content": state['content'], "image_url": ""}
-
-# --- GRAPH ---
-workflow = StateGraph(AgentState)
-workflow.add_node("scout", trend_scout_node)
-workflow.add_node("researcher", researcher_node)
-workflow.add_node("architect", architect_node)
-workflow.add_node("writer", writer_node)
-workflow.add_node("editor", aio_editor_node)
-workflow.add_node("designer", designer_node)
-
-workflow.set_entry_point("scout")
-workflow.add_edge("scout", "researcher")
-workflow.add_edge("researcher", "architect")
-workflow.add_edge("architect", "writer")
-
-def loop_check(state):
-    return "writer" if state['iteration'] < len(state['outline']) else "editor"
-
-workflow.add_conditional_edges("writer", loop_check)
-workflow.add_edge("editor", "designer")
-workflow.add_edge("designer", END)
-app = workflow.compile()
-
-# --- PUBLISHING ---
-if __name__ == "__main__":
-    FIELD = "Artificial Intelligence and Robotics"
-    final_state = app.invoke({
-        "field": FIELD, "topic": "", "content": "", "iteration": 0, 
-        "research": "", "outline": [], "image_url": ""
-    })
-    
-    update_site_branding_avatar(final_state)
-    
-    today = datetime.datetime.now().strftime("%Y-%m-%d")
-    slug = re.sub(r'[^a-z0-9]', '-', final_state['topic'].lower())[:40].strip("-")
-    filename = f"_posts/{today}-{slug}.md"
-    
-    # PERMANENT FIXES
-    clean_content = final_state['content']
-    
-    # 1. Strip H2 tag hallucinations and duplicate headers
-    # This regex is specifically tuned to catch "## H2: Title" or "## Section: Title"
-    clean_content = re.sub(r'##\s*(H2|Header|Section|Title|Topic|Step):?\s*', '## ', clean_content, flags=re.I)
-    
-    # 2. Collapse duplicate line breaks (prevent redundant spacing)
-    clean_content = re.sub(r'\n{3,}', '\n\n', clean_content).strip()
-    
-    fm = f"---\nlayout: post\ntitle: \"{final_state['topic']}\"\ndate: {today} 12:00:00 +0200\ncategories: [AI]\n---\n\n"
-    
-    os.makedirs("_posts", exist_ok=True)
-    with open(filename, "w", encoding="utf-8") as f:
-        f.write(fm + clean_content)
-    print(f"✅ Success: Published {filename}.")
+            print(f"✨ Success: Gemini generated header:

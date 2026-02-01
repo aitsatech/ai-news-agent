@@ -31,6 +31,8 @@ jobs:
           echo "📦 Installing libraries..."
           python -m pip install --upgrade pip
           pip install ddgs duckduckgo-search langchain-groq langchain-community langgraph google-genai requests Pillow
+          python cleanup.py   # This now cleans both Posts and Images
+          python agent.py
           
           # Run the cleanup first to make room for new content
           echo "🧹 Cleaning old assets..."

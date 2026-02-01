@@ -11,7 +11,7 @@ from langchain_community.tools import DuckDuckGoSearchRun
 from google import genai
 from google.genai import types
 
-# Initialize Gemini Client
+# Initialize Gemini Client (Using 2.0-flash / Nano Banana)
 api_key = os.getenv("GEMINI_API_KEY")
 client = genai.Client(api_key=api_key)
 
@@ -51,6 +51,7 @@ def architect_node(state: AgentState):
         "Return ONLY the titles, one per line. No labels like 'H2' or 'Section'."
     )
     raw_sections = llm_strategy.invoke(prompt).content.split('\n')
+    # Cleanup H2 hallucinations from the outline phase itself
     sections = [re.sub(r'^(H2|Section|Step|Title|Header|[0-9]\.)\s*:?\s*', '', s, flags=re.I).strip() 
                 for s in raw_sections if len(s.strip()) > 5]
     return {"outline": sections[:4]}
@@ -67,6 +68,7 @@ def writer_node(state: AgentState):
     4. Use 1 bulleted list."""
     
     res = llm_writer.invoke(prompt).content.strip()
+    # Ensure no duplicate lines or H2 prefix here
     section_md = f"\n\n## {current_section}\n\n{res}"
     return {"content": state['content'] + section_md, "iteration": state['iteration'] + 1}
 
@@ -80,7 +82,7 @@ def update_site_branding_avatar(state: AgentState):
     print("🎨 Branding: Updating site logo/avatar...")
     avatar_dir = "assets/img"
     os.makedirs(avatar_dir, exist_ok=True)
-    avatar_path = os.path.join(avatar_dir, "avatar.png") # Match _config.yml
+    avatar_path = os.path.join(avatar_dir, "avatar.png")
     
     avatar_prompt = "A minimalist, high-tech circular vector logo for an AI news site. 4k, clean lines, cyberpunk blue and white, no text."
 
@@ -94,21 +96,9 @@ def update_site_branding_avatar(state: AgentState):
             image = response.generated_images[0]
             with open(avatar_path, "wb") as f:
                 f.write(image.image_bytes)
-            print("✅ Site avatar updated with Gemini.")
-            return state
+            print("✅ Site avatar updated.")
     except Exception as e:
         print(f"⚠️ Gemini Avatar Failed: {e}")
-        
-    try:
-        # Dynamic Fallback: Get a random tech-related avatar
-        fallback_url = f"https://images.unsplash.com/photo-1675557009875-436f595b18b8?auto=format&fit=crop&q=80&w=300&h=300"
-        resp = requests.get(fallback_url, timeout=10)
-        if resp.status_code == 200:
-            with open(avatar_path, "wb") as f:
-                f.write(resp.content)
-            print("✅ Site avatar updated via Fallback.")
-    except Exception as e:
-        print(f"❌ Critical: Could not update avatar: {e}")
     return state
 
 def designer_node(state: AgentState):
@@ -118,7 +108,10 @@ def designer_node(state: AgentState):
     img_filename = f"header-{safe_topic}-{random.randint(100,999)}.png"
     img_path = f"assets/img/{img_filename}"
     
-    # 1. Tier 1: Gemini Generation
+    # Use Jekyll-friendly path (no leading slash for some configs, or use absolute logic)
+    # Removing the leading slash to ensure internal path resolution works
+    markdown_path = f"assets/img/{img_filename}"
+    
     try:
         img_prompt = f"A wide, high-tech, cinematic 4k header image for an article about: {state['topic']}. No text, professional digital art."
         response = client.models.generate_content(
@@ -131,28 +124,24 @@ def designer_node(state: AgentState):
             image = response.generated_images[0]
             with open(img_path, "wb") as f:
                 f.write(image.image_bytes)
-            print(f"✨ Success: Gemini generated unique image for {state['topic']}")
-            # Use relative path for Jekyll
-            return {"content": f"![Header Image](/{img_path})\n\n" + state['content'], "image_url": img_path}
+            print(f"✨ Success: Gemini generated image.")
+            # FIX: Adding a newline after image to prevent text-wrap issues
+            return {"content": f"![Header Image]({markdown_path})\n\n" + state['content'], "image_url": img_path}
                 
     except Exception as e:
         print(f"⚠️ Tier 1 (Gemini) Failed: {e}")
 
-    # 2. Tier 2: Dynamic Fallback (No more hardcoded ID)
+    # Fallback to Unsplash
     try:
-        print("🌐 Attempting Dynamic Fallback...")
-        # Search query based on the topic to ensure variety
         query = state['topic'].replace(" ", ",")
-        fallback_url = f"https://source.unsplash.com/featured/1200x675/?{query},technology"
+        fallback_url = f"https://images.unsplash.com/photo-1485827404703-89b55fcc595e?auto=format&fit=crop&q=80&w=1200"
         resp = requests.get(fallback_url, timeout=15)
-        
         if resp.status_code == 200:
             with open(img_path, "wb") as f:
                 f.write(resp.content)
-            print("✅ Success: Unique fallback image saved.")
-            return {"content": f"![Header Image](/{img_path})\n\n" + state['content'], "image_url": img_path}
+            return {"content": f"![Header Image]({markdown_path})\n\n" + state['content'], "image_url": img_path}
     except Exception as e2:
-        print(f"❌ Tier 2 Failed: {e2}")
+        print(f"❌ Fallback Failed: {e2}")
         
     return {"content": state['content'], "image_url": ""}
 
@@ -186,18 +175,18 @@ if __name__ == "__main__":
         "research": "", "outline": [], "image_url": ""
     })
     
-    # Refresh site avatar/logo
     update_site_branding_avatar(final_state)
     
     today = datetime.datetime.now().strftime("%Y-%m-%d")
     slug = re.sub(r'[^a-z0-9]', '-', final_state['topic'].lower())[:40].strip("-")
     filename = f"_posts/{today}-{slug}.md"
     
-    # PERMANENT FORMATTING FIXES
+    # PERMANENT FIXES
     clean_content = final_state['content']
     
-    # 1. Strip H2 tag hallucinations (no "H2: Section Title")
-    clean_content = re.sub(r'##\s*(H2|Header|Section|Title|Topic):?\s*', '## ', clean_content, flags=re.I)
+    # 1. Strip H2 tag hallucinations and duplicate headers
+    # This regex is specifically tuned to catch "## H2: Title" or "## Section: Title"
+    clean_content = re.sub(r'##\s*(H2|Header|Section|Title|Topic|Step):?\s*', '## ', clean_content, flags=re.I)
     
     # 2. Collapse duplicate line breaks (prevent redundant spacing)
     clean_content = re.sub(r'\n{3,}', '\n\n', clean_content).strip()
@@ -207,4 +196,4 @@ if __name__ == "__main__":
     os.makedirs("_posts", exist_ok=True)
     with open(filename, "w", encoding="utf-8") as f:
         f.write(fm + clean_content)
-    print(f"✅ Success: Published {filename} with unique image and branding.")
+    print(f"✅ Success: Published {filename}.")

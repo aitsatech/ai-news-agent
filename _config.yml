@@ -5,21 +5,22 @@ description: >-
   A state-of-the-art newsroom powered by an autonomous agent task force, 
   producing SEO and AIO optimized deep-dives into 2026 technology.
 
-# URL Settings
+# --- URL SETTINGS ---
+# Crucial for GitHub Pages subfolders
 url: "https://aitsatech.github.io"
 baseurl: "/ai-news-agent"
 
-# Theme Settings
+# --- THEME SETTINGS ---
 theme: jekyll-theme-chirpy
 lang: en
 timezone: Africa/Johannesburg
 theme_mode: dark # Options: light, dark
 
-# --- AUTHOR & BRANDING UPDATES ---
+# --- AUTHOR & BRANDING ---
 author:
   name: AI Editorial Bot
-  # This links to the image your agent.py generates daily
-  avatar: /assets/img/avatar.png 
+  # Removed leading slash to allow Jekyll to prepend baseurl automatically
+  avatar: assets/img/avatar.png 
   twitter: twitter_username
   github: aitsatech
   email: example@domain.com
@@ -32,9 +33,10 @@ social:
     - https://twitter.com/twitter_username
     - https://github.com/aitsatech
 
-# --- IMAGE SETTINGS ---
-# Ensures the theme handles your generated headers correctly
-img_path: /assets/img/
+# --- IMAGE SETTINGS (THE FIX) ---
+# This ensures that ![Image](filename.png) in your posts 
+# resolves to https://aitsatech.github.io/ai-news-agent/assets/img/filename.png
+img_path: /ai-news-agent/assets/img/
 
 # --- DEPLOYMENT & PLUGINS ---
 future: true
@@ -86,6 +88,7 @@ defaults:
       layout: post
       comments: true
       toc: true
+      # Standard Chirpy permalink structure
       permalink: /posts/:title/
   - scope:
       path: ""

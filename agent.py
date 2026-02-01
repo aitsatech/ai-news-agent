@@ -77,16 +77,12 @@ def aio_editor_node(state: AgentState):
     return {"content": "> ### Key Takeaways\n>\n" + box + "\n\n" + state['content']}
 
 def update_site_branding_avatar(state: AgentState):
-    """
-    Updates the main branding logo located above the 'AI Daily Insights' header.
-    Path: assets/img/avatar.png
-    """
     print("🎨 Branding: Updating site logo/avatar...")
     avatar_dir = "assets/img"
     os.makedirs(avatar_dir, exist_ok=True)
-    avatar_path = os.path.join(avatar_dir, "aitsa.png")
+    avatar_path = os.path.join(avatar_dir, "avatar.png") # Match _config.yml
     
-    avatar_prompt = "A minimalist, high-tech circular vector logo for an AI news site. 4k, clean lines, futuristic aesthetic."
+    avatar_prompt = "A minimalist, high-tech circular vector logo for an AI news site. 4k, clean lines, cyberpunk blue and white, no text."
 
     try:
         response = client.models.generate_content(
@@ -94,64 +90,71 @@ def update_site_branding_avatar(state: AgentState):
             contents=[avatar_prompt],
             config=types.GenerateContentConfig(image_config=types.ImageConfig(aspect_ratio="1:1"))
         )
-        for part in response.parts:
-            if part.inline_data:
-                with open(avatar_path, "wb") as f:
-                    f.write(part.inline_data.data)
-                print("✅ Site avatar updated with Gemini.")
-                return state
+        if response.generated_images:
+            image = response.generated_images[0]
+            with open(avatar_path, "wb") as f:
+                f.write(image.image_bytes)
+            print("✅ Site avatar updated with Gemini.")
+            return state
     except Exception as e:
         print(f"⚠️ Gemini Avatar Failed: {e}")
         
     try:
-        fallback_url = "https://images.unsplash.com/photo-1675557009875-436f595b18b8?auto=format&fit=crop&q=80&w=300&h=300"
+        # Dynamic Fallback: Get a random tech-related avatar
+        fallback_url = f"https://images.unsplash.com/photo-1675557009875-436f595b18b8?auto=format&fit=crop&q=80&w=300&h=300"
         resp = requests.get(fallback_url, timeout=10)
-        content_type = resp.headers.get('Content-Type', '')
-        if resp.status_code == 200 and 'image' in content_type:
+        if resp.status_code == 200:
             with open(avatar_path, "wb") as f:
                 f.write(resp.content)
-            print("✅ Site avatar updated via Validated Fallback.")
+            print("✅ Site avatar updated via Fallback.")
     except Exception as e:
         print(f"❌ Critical: Could not update avatar: {e}")
     return state
 
 def designer_node(state: AgentState):
-    print("🎨 Designer: Generating header...")
+    print("🎨 Designer: Generating dynamic header...")
     os.makedirs("assets/img", exist_ok=True)
     safe_topic = re.sub(r'[^a-zA-Z0-9]', '-', state['topic'][:20]).lower()
     img_filename = f"header-{safe_topic}-{random.randint(100,999)}.png"
     img_path = f"assets/img/{img_filename}"
     
+    # 1. Tier 1: Gemini Generation
     try:
-        img_prompt = f"A high-tech professional cinematic header for: {state['topic']}."
+        img_prompt = f"A wide, high-tech, cinematic 4k header image for an article about: {state['topic']}. No text, professional digital art."
         response = client.models.generate_content(
             model="gemini-2.0-flash",
             contents=[img_prompt],
             config=types.GenerateContentConfig(image_config=types.ImageConfig(aspect_ratio="16:9"))
         )
-        for part in response.parts:
-            if part.inline_data:
-                with open(img_path, "wb") as f:
-                    f.write(part.inline_data.data)
-                print("✨ Success: Gemini generated image.")
-                return {"content": f"![Header Image](/{img_path})\n\n" + state['content'], "image_url": img_path}
+        
+        if response.generated_images:
+            image = response.generated_images[0]
+            with open(img_path, "wb") as f:
+                f.write(image.image_bytes)
+            print(f"✨ Success: Gemini generated unique image for {state['topic']}")
+            # Use relative path for Jekyll
+            return {"content": f"![Header Image](/{img_path})\n\n" + state['content'], "image_url": img_path}
                 
     except Exception as e:
-        print(f"⚠️ Tier 1 Failed: {e}")
+        print(f"⚠️ Tier 1 (Gemini) Failed: {e}")
 
+    # 2. Tier 2: Dynamic Fallback (No more hardcoded ID)
     try:
-        fallback_url = f"https://images.unsplash.com/photo-1485827404703-89b55fcc595e?auto=format&fit=crop&q=80&w=1200"
+        print("🌐 Attempting Dynamic Fallback...")
+        # Search query based on the topic to ensure variety
+        query = state['topic'].replace(" ", ",")
+        fallback_url = f"https://source.unsplash.com/featured/1200x675/?{query},technology"
         resp = requests.get(fallback_url, timeout=15)
-        content_type = resp.headers.get('Content-Type', '')
-        if resp.status_code == 200 and 'image' in content_type:
+        
+        if resp.status_code == 200:
             with open(img_path, "wb") as f:
                 f.write(resp.content)
+            print("✅ Success: Unique fallback image saved.")
             return {"content": f"![Header Image](/{img_path})\n\n" + state['content'], "image_url": img_path}
-        else:
-            raise ValueError(f"Received non-image content: {content_type}")
     except Exception as e2:
-        ext_link = "https://images.unsplash.com/photo-1485827404703-89b55fcc595e"
-        return {"content": f"![Header Image]({ext_link})\n\n" + state['content'], "image_url": ""}
+        print(f"❌ Tier 2 Failed: {e2}")
+        
+    return {"content": state['content'], "image_url": ""}
 
 # --- GRAPH ---
 workflow = StateGraph(AgentState)
@@ -183,18 +186,20 @@ if __name__ == "__main__":
         "research": "", "outline": [], "image_url": ""
     })
     
-    # Refresh site avatar/logo before finishing
+    # Refresh site avatar/logo
     update_site_branding_avatar(final_state)
     
     today = datetime.datetime.now().strftime("%Y-%m-%d")
     slug = re.sub(r'[^a-z0-9]', '-', final_state['topic'].lower())[:40].strip("-")
     filename = f"_posts/{today}-{slug}.md"
     
-    # PERMANENT FIXES
+    # PERMANENT FORMATTING FIXES
     clean_content = final_state['content']
-    # 1. Strip H2 tag hallucinations
+    
+    # 1. Strip H2 tag hallucinations (no "H2: Section Title")
     clean_content = re.sub(r'##\s*(H2|Header|Section|Title|Topic):?\s*', '## ', clean_content, flags=re.I)
-    # 2. Collapse duplicate line breaks (3+ to 2)
+    
+    # 2. Collapse duplicate line breaks (prevent redundant spacing)
     clean_content = re.sub(r'\n{3,}', '\n\n', clean_content).strip()
     
     fm = f"---\nlayout: post\ntitle: \"{final_state['topic']}\"\ndate: {today} 12:00:00 +0200\ncategories: [AI]\n---\n\n"
@@ -202,4 +207,4 @@ if __name__ == "__main__":
     os.makedirs("_posts", exist_ok=True)
     with open(filename, "w", encoding="utf-8") as f:
         f.write(fm + clean_content)
-    print(f"✅ Success: Published {filename} with refreshed branding and clean formatting.")
+    print(f"✅ Success: Published {filename} with unique image and branding.")

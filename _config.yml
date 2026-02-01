@@ -1,8 +1,6 @@
-# The Site Configuration
 title: AI Daily Insights
 tagline: Autonomous AI Agent Task Force reporting from the future.
-description: >-
-  A state-of-the-art newsroom powered by an autonomous agent task force.
+description: A state-of-the-art newsroom powered by an autonomous agent task force.
 
 # --- URL SETTINGS ---
 url: "https://aitsatech.github.io"
@@ -17,21 +15,15 @@ theme_mode: dark
 # --- AUTHOR & BRANDING ---
 author:
   name: AI Editorial Bot
-  # Relative to site root
   avatar: /assets/img/avatar.png 
-  twitter: twitter_username
   github: aitsatech
-  email: example@domain.com
 
 # --- IMAGE SETTINGS ---
-# We keep this simple to ensure the Front Matter 'path' resolves correctly
+# Setting this to baseurl ensures Front Matter paths resolve correctly
 img_path: /ai-news-agent
 
 # --- DEPLOYMENT & PLUGINS ---
 future: true
-reading_time: true
-paginate: 10
-
 plugins:
   - jekyll-feed
   - jekyll-seo-tag
@@ -40,12 +32,6 @@ plugins:
   - jekyll-include-cache
   - jekyll-archives
   - jekyll-redirect-from
-
-# Collections
-collections:
-  tabs:
-    output: true
-    sort_by: order
 
 # Defaults for Posts
 defaults:
@@ -56,4 +42,3 @@ defaults:
       layout: post
       comments: true
       toc: true
-      permalink: /posts/:title/

@@ -11,7 +11,7 @@ from langchain_community.tools import DuckDuckGoSearchRun
 from google import genai
 from google.genai import types
 
-# Initialize Gemini Client (Gemini 2.0 Flash)
+# Initialize Gemini Client
 api_key = os.getenv("GEMINI_API_KEY")
 client = genai.Client(api_key=api_key)
 
@@ -81,7 +81,6 @@ def update_site_branding_avatar(state: AgentState):
     avatar_dir = "assets/img"
     os.makedirs(avatar_dir, exist_ok=True)
     avatar_path = os.path.join(avatar_dir, "avatar.png")
-    
     avatar_prompt = "A minimalist, high-tech circular vector logo for an AI news site. 4k, clean lines, cyberpunk blue and white, no text."
 
     try:
@@ -121,13 +120,10 @@ def designer_node(state: AgentState):
             with open(img_path, "wb") as f:
                 f.write(image.image_bytes)
             print(f"✨ Success: Gemini generated header: {img_filename}")
-            
-            # Pass only the filename; we will move this to Front Matter in the publishing step
             return {"content": state['content'], "image_url": img_filename}
                 
     except Exception as e:
         print(f"⚠️ Image Generation Failed: {e}")
-        
     return {"content": state['content'], "image_url": ""}
 
 # --- GRAPH ---
@@ -166,14 +162,28 @@ if __name__ == "__main__":
     slug = re.sub(r'[^a-z0-9]', '-', final_state['topic'].lower())[:40].strip("-")
     filename = f"_posts/{today}-{slug}.md"
     
-    # 1. PERMANENT H2 FIX: Clean H2 tag hallucinations and duplicate headers
+    # 1. PERMANENT H2 FIX: Clean H2 tag hallucinations
     clean_content = final_state['content']
     clean_content = re.sub(r'##\s*(H2|Header|Section|Title|Topic|Step):?\s*', '## ', clean_content, flags=re.I)
     
-    # 2. PERMANENT DUPLICATE LINE FIX: Collapse duplicate line breaks
+    # 2. PERMANENT DUPLICATE LINE FIX: Collapse whitespace
     clean_content = re.sub(r'\n{3,}', '\n\n', clean_content).strip()
     
-    # --- CHIRPY BANNER FIX ---
-    # Construct the path specifically for the 'image' metadata block
-    # Note: We use the relative path starting from /assets/
-    banner_img = final_state
+    # --- CHIRPY BANNER FRONT MATTER ---
+    image_meta = ""
+    if final_state['image_url']:
+        image_meta = f"image:\n  path: /assets/img/{final_state['image_url']}\n  alt: \"{final_state['topic']}\""
+
+    fm = f"""---
+layout: post
+title: "{final_state['topic']}"
+date: {today} 12:00:00 +0200
+categories: [AI]
+{image_meta}
+---
+
+"""
+    with open(filename, "w", encoding="utf-8") as f:
+        f.write(fm + clean_content)
+    
+    print(f"✅ Success: Published {filename}")

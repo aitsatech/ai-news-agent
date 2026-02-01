@@ -28,16 +28,15 @@ jobs:
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
-          echo "📦 Installing necessary libraries..."
+          echo "📦 Installing libraries..."
           python -m pip install --upgrade pip
-          
-          # Added 'ddgs' explicitly to satisfy the LangChain ImportError
           pip install ddgs duckduckgo-search langchain-groq langchain-community langgraph google-genai requests Pillow
           
-          echo "🧹 Cleaning old posts..."
-          if [ -f cleanup.py ]; then python cleanup.py; fi
+          # Run the cleanup first to make room for new content
+          echo "🧹 Cleaning old assets..."
+          python cleanup.py
 
-          echo "🚀 Starting Agent (Updating Branding & Content)..."
+          echo "🚀 Starting Agent..."
           python agent.py
 
       - name: Commit and Push Changes

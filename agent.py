@@ -3,6 +3,7 @@ import requests
 import random
 import datetime
 import re
+import time
 from io import BytesIO
 from typing import TypedDict, List
 from langgraph.graph import StateGraph, END
@@ -55,16 +56,19 @@ def architect_node(state: AgentState):
 def writer_node(state: AgentState):
     current_section = state['outline'][state['iteration']]
     print(f"✍️ Writer: Drafting {current_section}...")
-    prompt = f"Write a section for: {current_section}. Research: {state['research']}. RULES: 1. No title repetition. 2. Bold 1st sentence. 3. Max 200 words. 4. Use 1 list."
+    prompt = f"Write a section for: {current_section}. Research: {state['research']}. RULES: 1. No title repetition. 2. Bold 1st sentence. 3. Max 200 words. 4. Use 1 list. 5. No redundant H2 tags inside the text."
     res = llm_writer.invoke(prompt).content.strip()
-    section_md = f"\n\n## {current_section}\n\n{res}"
+    # Add spacing before H2 to prevent "next to header" issues
+    section_md = f"\n\n## {current_section}\n\n{res}\n"
     return {"content": state['content'] + section_md, "iteration": state['iteration'] + 1}
 
 def aio_editor_node(state: AgentState):
     print("📋 Editor: Finalizing content and takeaways...")
     prompt = f"Summarize this in 3 short bullet points: {state['content'][:1000]}."
     box = llm_strategy.invoke(prompt).content
-    return {"content": "> ### Key Takeaways\n>\n" + box + "\n\n" + state['content']}
+    # Added extra padding after the Key Takeaways to separate from first H2
+    header_box = f"> ### Key Takeaways\n>\n{box}\n\n&nbsp;\n\n" 
+    return {"content": header_box + state['content']}
 
 def designer_node(state: AgentState):
     print("🎨 Designer: Generating dynamic header...")
@@ -74,19 +78,24 @@ def designer_node(state: AgentState):
     img_filename = f"header-{safe_topic}-{random.randint(100,999)}.png"
     img_path = os.path.join(img_dir, img_filename)
     
-    try:
-        img_prompt = f"A wide, high-tech, cinematic 4k header image for: {state['topic']}. No text."
-        response = client.models.generate_content(
-            model="gemini-2.0-flash",
-            contents=[img_prompt],
-            config=types.GenerateContentConfig(image_config=types.ImageConfig(aspect_ratio="16:9"))
-        )
-        if response.generated_images:
-            with open(img_path, "wb") as f:
-                f.write(response.generated_images[0].image_bytes)
-            return {"image_url": img_filename}
-    except Exception as e:
-        print(f"⚠️ Image Failed: {e}")
+    # Retry Logic for 429 Errors
+    for attempt in range(2):
+        try:
+            model_to_use = "gemini-2.0-flash" if attempt == 0 else "gemini-1.5-flash"
+            img_prompt = f"A wide, high-tech, cinematic 4k header image for: {state['topic']}. No text."
+            response = client.models.generate_content(
+                model=model_to_use,
+                contents=[img_prompt],
+                config=types.GenerateContentConfig(image_config=types.ImageConfig(aspect_ratio="16:9"))
+            )
+            if response.generated_images:
+                with open(img_path, "wb") as f:
+                    f.write(response.generated_images[0].image_bytes)
+                return {"image_url": img_filename}
+        except Exception as e:
+            print(f"⚠️ Attempt {attempt+1} failed: {e}")
+            time.sleep(10) # Wait for quota reset
+            
     return {"image_url": ""}
 
 def update_site_branding_avatar(state: AgentState):
@@ -94,7 +103,7 @@ def update_site_branding_avatar(state: AgentState):
     if os.path.exists(avatar_path): return
     try:
         response = client.models.generate_content(
-            model="gemini-2.0-flash",
+            model="gemini-1.5-flash",
             contents=["A minimalist high-tech robot avatar logo, white background"],
             config=types.GenerateContentConfig(image_config=types.ImageConfig(aspect_ratio="1:1"))
         )
@@ -124,23 +133,44 @@ if __name__ == "__main__":
     clean_topic = final_state['topic'].replace('"', '')
     slug = re.sub(r'[^a-z0-9]', '-', clean_topic.lower())[:40].strip("-")
     
-    # Cleaning
-    content = re.sub(r'##\s*(H2|Header|Section|Title|Topic|Step):?\s*', '## ', final_state['content'], flags=re.I)
+    # Permanent Solution: Deduplication & Cleaning
+    raw_content = final_state['content']
+    
+    # 1. Deduplicate lines (Permanent Solution)
+    lines = raw_content.split('\n')
+    seen = set()
+    deduped_lines = []
+    for line in lines:
+        stripped = line.strip()
+        if stripped == "" or stripped not in seen:
+            deduped_lines.append(line)
+            if stripped != "" and not stripped.startswith(">") and not stripped.startswith("##"):
+                seen.add(stripped)
+    
+    content = "\n".join(deduped_lines)
+    
+    # 2. Prevent H2 tags next to headers (Permanent Solution)
+    content = re.sub(r'##\s*(H2|Header|Section|Title|Topic|Step):?\s*', '## ', content, flags=re.I)
     content = re.sub(r'\n{3,}', '\n\n', content).strip()
     
+    # 3. Image Metadata Fix
     image_meta = ""
     if final_state.get('image_url'):
+        # Using relative path for Chirpy assets
         image_meta = f"image:\n  path: /assets/img/{final_state['image_url']}\n  alt: \"{clean_topic}\""
 
     post_md = f"""---
 layout: post
 title: "{clean_topic}"
 date: {today} 12:00:00 +0200
-categories: [AI]
+categories: [AI, Technology]
 {image_meta}
 ---
 
 {content}"""
 
+    # Final Save
+    os.makedirs("_posts", exist_ok=True)
     with open(f"_posts/{today}-{slug}.md", "w", encoding="utf-8") as f:
         f.write(post_md)
+    print(f"🚀 Article Published: {today}-{slug}.md")

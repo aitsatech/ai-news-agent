@@ -13,6 +13,10 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          # Disabling persist-credentials helps avoid trigger loops 
+          # but ensures the push is recognized as a new event
+          persist-credentials: true
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -30,13 +34,26 @@ jobs:
 
       - name: Commit and Push Changes
         run: |
-          git config --global user.name "AI Editor"
-          git config --global user.email "editor@ai-news.bot"
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          
+          # Ensure assets directories exist so git add doesn't fail
+          mkdir -p _posts assets/img
+          
           git add _posts/*.md
           git add assets/img/*.png
+          
           if git diff --staged --quiet; then
-            echo "No changes."
+            echo "No changes to commit."
           else
-            git commit -m "AI Update: $(date +'%Y-%m-%d')"
+            git commit -m "AI Update: $(date +'%Y-%m-%d') [skip ci]"
+            # Using --force or pulling first prevents push failures
+            git pull --rebase origin main
             git push origin main
           fi
+
+      # NEW STEP: Explicitly trigger the Deployment workflow
+      - name: Trigger Deploy
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run "Deploy Site to Pages"

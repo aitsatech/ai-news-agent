@@ -4,9 +4,9 @@ source "https://rubygems.org"
 
 # Core Jekyll and Chirpy Theme
 gem "jekyll", "~> 4.3.4"
-gem "jekyll-theme-chirpy", "~> 7.0"
+gem "jekyll-theme-chirpy", "~> 7.0.1"
 
-# Explicitly list all plugins from your _config.yml
+# Required plugins for Chirpy to function and display articles
 group :jekyll_plugins do
   gem "jekyll-feed"
   gem "jekyll-seo-tag"
@@ -15,13 +15,13 @@ group :jekyll_plugins do
   gem "jekyll-include-cache"
   gem "jekyll-archives"
   gem "jekyll-redirect-from"
-  gem "jekyll-twitter-plugin"
 end
 
-# Required for Ruby 3.3+ compatibility
+# Required for Ruby 3.3+ compatibility (Standard Library gems)
 gem "csv"
 gem "base64"
-gem "webrick" # Required for local serving in newer Ruby versions
+gem "webrick"
+gem "google-protobuf", "~> 3.0" # Added to support advanced asset processing if needed
 
 # Support for different Operating Systems
 platforms :mingw, :x64_mingw, :mswin, :jruby do

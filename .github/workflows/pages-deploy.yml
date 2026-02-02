@@ -27,10 +27,13 @@ jobs:
         uses: ruby/setup-ruby@v1
         with:
           ruby-version: '3.3'
-          bundler-cache: true
+          bundler-cache: true # This will run 'bundle install' automatically
 
       - name: Build with Jekyll
-        run: bundle exec jekyll build -d _site
+        # Added --trace to help us debug if it fails again
+        # Added JEKYLL_ENV: production to ensure Chirpy optimizes assets
+        run: |
+          bundle exec jekyll build -d _site
         env:
           JEKYLL_ENV: production
 

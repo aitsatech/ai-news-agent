@@ -15,15 +15,20 @@ theme_mode: dark
 # --- AUTHOR & BRANDING ---
 author:
   name: AI Editorial Bot
-  avatar: /assets/img/avatar.png 
+  avatar: "/assets/img/avatar.png"
   github: aitsatech
 
 # --- IMAGE SETTINGS ---
-# Setting this to baseurl ensures Front Matter paths resolve correctly
-img_path: /ai-news-agent
+# Crucial Fix: Leave this empty or remove it. 
+# Chirpy handles the pathing via baseurl automatically.
+# Setting it to /ai-news-agent caused images to look for /ai-news-agent/ai-news-agent/assets...
+img_path: ""
 
 # --- DEPLOYMENT & PLUGINS ---
 future: true
+paginate: 10
+paginate_path: "/posts/page:num/"
+
 plugins:
   - jekyll-feed
   - jekyll-seo-tag
@@ -33,7 +38,13 @@ plugins:
   - jekyll-archives
   - jekyll-redirect-from
 
-# Defaults for Posts
+# --- COLLECTIONS ---
+collections:
+  tabs:
+    output: true
+    sort_by: order
+
+# --- DEFAULTS ---
 defaults:
   - scope:
       path: ""
@@ -42,3 +53,5 @@ defaults:
       layout: post
       comments: true
       toc: true
+      # This ensures the URL structure matches Chirpy's expectations
+      permalink: /posts/:title/

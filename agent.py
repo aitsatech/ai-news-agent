@@ -81,7 +81,6 @@ def aio_editor_node(state: AgentState):
     return {"content": header_box + state['content']}
 
 def designer_node(state: AgentState):
-    """Guarantees unique images and validates they are NOT 404 HTML pages."""
     print("🎨 Designer: Executing Image Protocol...")
     img_dir = "assets/img"
     os.makedirs(img_dir, exist_ok=True)
@@ -90,7 +89,6 @@ def designer_node(state: AgentState):
     img_filename = f"header-{timestamp}.png"
     img_path = os.path.join(img_dir, img_filename)
     
-    # 1. Try Gemini Gen
     try:
         img_prompt = f"Futuristic high-quality digital art for: {state['topic']}. Cinematic lighting, 16:9, no text."
         response = client.models.generate_content(
@@ -105,14 +103,12 @@ def designer_node(state: AgentState):
     except Exception:
         print(f"⚠️ Gemini Gen failed, moving to Unsplash...")
 
-    # 2. Unsplash Fallback with validation
     try:
         seed = random.randint(1, 99999)
         keywords = "technology,ai,robotics"
         fallback_url = f"https://images.unsplash.com/featured/1200x675?{keywords}&sig={seed}"
         res = requests.get(fallback_url, headers={'User-Agent': 'Mozilla/5.0'}, timeout=15)
         
-        # Ensure it's a real image and not a 404 error page
         if res.status_code == 200 and "image" in res.headers.get("Content-Type", ""):
             with open(img_path, "wb") as f:
                 f.write(res.content)
@@ -125,7 +121,7 @@ def designer_node(state: AgentState):
 def auto_deploy(today_date):
     print("🚀 Auto-Deploy: Pushing to GitHub...")
     try:
-        # Check if git user is set, if not, set a default bot identity
+        # Check if git identity is configured
         check_user = subprocess.run(["git", "config", "user.name"], capture_output=True, text=True)
         if not check_user.stdout.strip():
             print("👤 Setting temporary Git identity...")
@@ -133,7 +129,8 @@ def auto_deploy(today_date):
             subprocess.run(["git", "config", "user.name", "AI Content Bot"], check=True)
 
         subprocess.run(["git", "add", "."], check=True)
-        # Check if there are changes before committing
+        
+        # Only commit if there are actual changes
         status = subprocess.run(["git", "status", "--porcelain"], capture_output=True, text=True)
         if status.stdout.strip():
             subprocess.run(["git", "commit", "-m", f"Post update: {today_date}"], check=True)
@@ -181,7 +178,7 @@ if __name__ == "__main__":
     clean_topic = final_state['topic'].replace('"', '')
     slug = re.sub(r'[^a-z0-9]', '-', clean_topic.lower()).strip("-")[:50]
     
-    # Final cleanup of repetitive text and labels
+    # Strict regex cleaning for headers and duplicate words
     content = final_state['content']
     content = re.sub(r'##\s*(H2|Header|Section|Title|Topic|Step):?\s*', '## ', content, flags=re.I)
     content = re.sub(r'\b(\w+)(?:\s+\1\b)+', r'\1', content, flags=re.I)
@@ -189,4 +186,22 @@ if __name__ == "__main__":
     
     image_line = ""
     if final_state['image_url']:
-        image_line = f"image:\n  path: assets/img/{final_state['
+        image_line = f"image:\n  path: assets/img/{final_state['image_url']}\n  alt: \"{clean_topic}\""
+
+    post_md = f"""---
+layout: post
+title: "{clean_topic}"
+date: {jekyll_time}
+categories: [AI, Technology]
+{image_line}
+---
+
+{content}"""
+
+    os.makedirs("_posts", exist_ok=True)
+    filename = f"{today_date}-{slug}.md"
+    with open(f"_posts/{filename}", "w", encoding="utf-8") as f:
+        f.write(post_md)
+        
+    print(f"📝 Post Created: {filename}")
+    auto_deploy(today_date)

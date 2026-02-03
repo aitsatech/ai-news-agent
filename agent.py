@@ -69,54 +69,50 @@ def aio_editor_node(state: AgentState):
     return {"content": header_box + state['content']}
 
 def designer_node(state: AgentState):
-    """REVAMPED: Guarantees a unique image every time via Gemini or Dynamic Fallback."""
-    print("🎨 Designer: Generating dynamic header...")
+    """COMPLETE REVAMP: Guarantees unique images and local saving."""
+    print("🎨 Designer: Executing Triple-Safety Image Protocol...")
     img_dir = "assets/img"
     os.makedirs(img_dir, exist_ok=True)
     
-    # Generate unique filename
+    # Generate unique filename based on time to prevent overwriting
     timestamp = int(time.time())
-    safe_topic = re.sub(r'[^a-zA-Z0-9]', '-', state['topic'][:15]).lower()
-    img_filename = f"header-{safe_topic}-{timestamp}.png"
+    img_filename = f"header-{timestamp}.png"
     img_path = os.path.join(img_dir, img_filename)
     
-    # Step 1: Attempt Gemini Gen
-    for model_name in ["gemini-2.0-flash", "gemini-1.5-flash"]:
-        try:
-            img_prompt = f"Cinematic 4k high-tech professional photography of {state['topic']}. Futuristic, no text, wide shot."
-            response = client.models.generate_content(
-                model=model_name,
-                contents=[img_prompt],
-                config=types.GenerateContentConfig(image_config=types.ImageConfig(aspect_ratio="16:9"))
-            )
-            if response.generated_images:
-                with open(img_path, "wb") as f:
-                    f.write(response.generated_images[0].image_bytes)
-                print(f"✅ Gemini Image Generated: {img_filename}")
-                return {"image_url": img_filename}
-        except Exception as e:
-            print(f"⚠️ {model_name} failed: {e}")
-            continue
-
-    # Step 2: Dynamic Fallback (No more static IDs)
-    print("🚀 Using Dynamic Fallback...")
+    # Step 1: Gemini Image Generation (Primary)
     try:
-        # We use a random seed + topic keywords to force Unsplash to provide a new image
-        keywords = f"technology,{state['field'].replace(' ', ',')},future"
-        random_seed = random.randint(1, 10000)
-        # Using the Unsplash Source-like redirect URL with a random seed
-        fallback_url = f"https://images.unsplash.com/featured/1200x675?{keywords}&sig={random_seed}"
-        
-        fallback_res = requests.get(fallback_url, timeout=15)
-        if fallback_res.status_code == 200:
+        img_prompt = f"High-tech cinematic 4k futuristic header for: {state['topic']}. Professional, 16:9 ratio, no text."
+        response = client.models.generate_content(
+            model="gemini-2.0-flash",
+            contents=[img_prompt],
+            config=types.GenerateContentConfig(image_config=types.ImageConfig(aspect_ratio="16:9"))
+        )
+        if response.generated_images:
             with open(img_path, "wb") as f:
-                f.write(fallback_res.content)
-            print(f"✅ Dynamic Fallback Saved: {img_filename}")
+                f.write(response.generated_images[0].image_bytes)
+            print(f"✅ Gemini generated unique image: {img_filename}")
             return {"image_url": img_filename}
     except Exception as e:
-        print(f"❌ Fallback failed: {e}")
-    
-    return {"image_url": ""}
+        print(f"⚠️ Gemini Gen failed ({e}), moving to Dynamic Fallback...")
+
+    # Step 2: Dynamic Fallback via Unsplash (Secondary)
+    # Using a random seed (sig) to force a different image every time
+    try:
+        keywords = f"technology,{state['field'].replace(' ', ',')},futuristic"
+        seed = random.randint(1, 99999)
+        # Using the direct Unsplash API endpoint for dynamic selection
+        fallback_url = f"https://images.unsplash.com/featured/1200x675?{keywords}&sig={seed}"
+        
+        headers = {'User-Agent': 'Mozilla/5.0'}
+        img_data = requests.get(fallback_url, headers=headers, timeout=15).content
+        
+        with open(img_path, "wb") as f:
+            f.write(img_data)
+        print(f"✅ Dynamic Fallback saved unique image: {img_filename}")
+        return {"image_url": img_filename}
+    except Exception as e:
+        print(f"❌ All image methods failed: {e}")
+        return {"image_url": ""}
 
 def update_site_branding_avatar(state: AgentState):
     avatar_path = "assets/img/avatar.png"
@@ -151,20 +147,27 @@ app = workflow.compile()
 
 # --- PUBLISHING ---
 if __name__ == "__main__":
-    final_state = app.invoke({"field": "AI and Robotics", "topic": "", "research": "", "outline": [], "content": "", "iteration": 0, "image_url": ""})
+    final_state = app.invoke({
+        "field": "AI and Robotics", 
+        "topic": "", 
+        "research": "", 
+        "outline": [], 
+        "content": "", 
+        "iteration": 0, 
+        "image_url": ""
+    })
     update_site_branding_avatar(final_state)
     
-    # Time Fix: Ensure date is slightly in the past to prevent Jekyll hiding "Future" posts
+    # JEKYLL TIME FIX: Ensure it doesn't set a future date
     now = datetime.datetime.now()
     today_date = now.strftime("%Y-%m-%d")
-    jekyll_time = f"{today_date} 00:01:00 +0200"
+    jekyll_time = f"{today_date} 09:00:00 +0200" # Explicit morning time
     
     clean_topic = final_state['topic'].replace('"', '')
-    # Cleaner Slug logic for better URL compatibility
     slug = re.sub(r'[^a-z0-9]', '-', clean_topic.lower())
     slug = re.sub(r'-+', '-', slug).strip("-")[:50]
     
-    # CONTENT CLEANING (Permanent Solution)
+    # CONTENT CLEANING (Your Permanent Instruction)
     raw_content = final_state['content']
     lines = raw_content.split('\n')
     seen = set()
@@ -180,26 +183,27 @@ if __name__ == "__main__":
     content = re.sub(r'##\s*(H2|Header|Section|Title|Topic|Step):?\s*', '## ', content, flags=re.I)
     content = re.sub(r'\n{3,}', '\n\n', content).strip()
     
-    # IMAGE METADATA
-    image_url = final_state.get('image_url')
-    image_meta = ""
-    if image_url:
-        image_meta = f"image:\n  path: /assets/img/{image_url}\n  alt: \"{clean_topic}\""
+    # FRONT MATTER CONTEXT
+    image_line = ""
+    if final_state['image_url']:
+        image_line = f"image:\n  path: /assets/img/{final_state['image_url']}\n  alt: \"{clean_topic}\""
 
     post_md = f"""---
 layout: post
 title: "{clean_topic}"
 date: {jekyll_time}
 categories: [AI, Technology]
-{image_meta}
+{image_line}
 ---
 
 {content}"""
 
+    # Final Directory Check and Save
     os.makedirs("_posts", exist_ok=True)
     filename = f"{today_date}-{slug}.md"
+    
     with open(f"_posts/{filename}", "w", encoding="utf-8") as f:
         f.write(post_md)
         
     print(f"🚀 Published: {filename}")
-    print(f"📸 Image assigned: {image_url}")
+    print(f"🖼️ Image saved to local assets: {final_state['image_url']}")

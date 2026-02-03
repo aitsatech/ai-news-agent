@@ -97,7 +97,7 @@ def designer_node(state: AgentState):
             print(f"⚠️ Attempt {attempt+1} image gen failed: {e}")
             if attempt == 0: time.sleep(5)
     
-    # Apex Fallback Image (Unsplash high-quality tech source)
+    # Apex Fallback Image
     print("🚀 Using Apex Fallback Image to ensure visual integrity.")
     return {"image_url": "https://images.unsplash.com/photo-1677442136019-21780ecad995?auto=format&fit=crop&q=80&w=1000"}
 
@@ -137,14 +137,16 @@ if __name__ == "__main__":
     final_state = app.invoke({"field": "AI and Robotics", "topic": "", "research": "", "outline": [], "content": "", "iteration": 0, "image_url": ""})
     update_site_branding_avatar(final_state)
     
-    today = datetime.datetime.now().strftime("%Y-%m-%d")
+    # APEX FIX: Force time to early morning to prevent "Future Post" build blocks
+    now = datetime.datetime.now()
+    today_date = now.strftime("%Y-%m-%d")
+    jekyll_time = f"{today_date} 00:01:00 +0200"
+    
     clean_topic = final_state['topic'].replace('"', '')
     slug = re.sub(r'[^a-z0-9]', '-', clean_topic.lower())[:40].strip("-")
     
     # Permanent Solution: Deduplication & Cleaning
     raw_content = final_state['content']
-    
-    # 1. Deduplicate lines (Permanent Solution)
     lines = raw_content.split('\n')
     seen = set()
     deduped_lines = []
@@ -152,17 +154,16 @@ if __name__ == "__main__":
         stripped = line.strip()
         if stripped == "" or stripped not in seen:
             deduped_lines.append(line)
-            # Only add significant content to 'seen' to allow blank lines and headers to persist
             if stripped != "" and not stripped.startswith(">") and not stripped.startswith("##"):
                 seen.add(stripped)
     
     content = "\n".join(deduped_lines)
     
-    # 2. Prevent H2 tags next to headers (Permanent Solution)
+    # Permanent Solution: Prevent H2 tags next to headers
     content = re.sub(r'##\s*(H2|Header|Section|Title|Topic|Step):?\s*', '## ', content, flags=re.I)
     content = re.sub(r'\n{3,}', '\n\n', content).strip()
     
-    # 3. Image Metadata Fix (Updated for Fallback support)
+    # Image Metadata Fix
     image_url = final_state.get('image_url')
     image_meta = ""
     if image_url:
@@ -172,7 +173,7 @@ if __name__ == "__main__":
     post_md = f"""---
 layout: post
 title: "{clean_topic}"
-date: {today} 12:00:00 +0200
+date: {jekyll_time}
 categories: [AI, Technology]
 {image_meta}
 ---
@@ -181,6 +182,9 @@ categories: [AI, Technology]
 
     # Final Save
     os.makedirs("_posts", exist_ok=True)
-    with open(f"_posts/{today}-{slug}.md", "w", encoding="utf-8") as f:
+    filename = f"{today_date}-{slug}.md"
+    with open(f"_posts/{filename}", "w", encoding="utf-8") as f:
         f.write(post_md)
-    print(f"🚀 Article Published with Graphics: {today}-{slug}.md")
+        
+    print(f"🚀 Article Published: {filename}")
+    print(f"⏰ Build Time set to {jekyll_time} to bypass future-date locks.")

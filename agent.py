@@ -37,7 +37,6 @@ def trend_scout_node(state: AgentState):
     news = search.run(f"latest trending breakthroughs in {state['field']} 2026")
     prompt = f"Based on this news: {news}\nPick the SINGLE most viral story for a deep-dive. Return ONLY the title."
     topic = llm_strategy.invoke(prompt).content.strip().replace('"', '')
-    print(f"🎯 Selected Topic: {topic}")
     return {"topic": topic}
 
 def researcher_node(state: AgentState):
@@ -49,7 +48,7 @@ def architect_node(state: AgentState):
     print("📐 Architect: Planning high-impact structure...")
     prompt = f"Create a 4-section outline for '{state['topic']}'. Return ONLY titles, one per line."
     raw_sections = llm_strategy.invoke(prompt).content.split('\n')
-    # PERMANENT FIX: Clean titles before they reach the state
+    # CLEANUP: Remove H2/Header/Step prefixes immediately
     sections = [re.sub(r'^(H2|Section|Step|Title|Header|[0-9]\.)\s*:?\s*', '', s, flags=re.I).strip() 
                 for s in raw_sections if len(s.strip()) > 5]
     return {"outline": sections[:4]}
@@ -57,17 +56,18 @@ def architect_node(state: AgentState):
 def writer_node(state: AgentState):
     current_section = state['outline'][state['iteration']]
     print(f"✍️ Writer: Drafting {current_section}...")
-    prompt = f"""Write a section for: {current_section}. 
-    Research Context: {state['research']}
-    RULES:
-    1. NEVER repeat the section title in your response.
-    2. Bold the first sentence.
-    3. Use exactly 1 bulleted list.
-    4. NO H2 tags or 'Section:' labels inside the text.
+    prompt = f"""Write a professional section for: {current_section}. 
+    Research: {state['research']}. 
+    RULES: 
+    1. DO NOT include the title in your response. 
+    2. Bold the first sentence. 
+    3. Use 1 list. 
+    4. NO H2 tags or duplicate 'Header:' labels. 
     5. Max 180 words."""
     
     res = llm_writer.invoke(prompt).content.strip()
-    # Post-processing to remove stuttering words (e.g., "the the")
+    
+    # STUTTER FILTER: Fixes "word word" repetition errors
     res = re.sub(r'\b(\w+)(?:\s+\1\b)+', r'\1', res, flags=re.I)
     
     section_md = f"\n\n## {current_section}\n\n{res}\n"
@@ -81,7 +81,7 @@ def aio_editor_node(state: AgentState):
     return {"content": header_box + state['content']}
 
 def designer_node(state: AgentState):
-    """Guarantees unique images and prevents saving 404 HTML errors."""
+    """Guarantees unique images and validates they are NOT 404 HTML pages."""
     print("🎨 Designer: Executing Image Protocol...")
     img_dir = "assets/img"
     os.makedirs(img_dir, exist_ok=True)
@@ -90,9 +90,9 @@ def designer_node(state: AgentState):
     img_filename = f"header-{timestamp}.png"
     img_path = os.path.join(img_dir, img_filename)
     
-    # 1. Gemini Image Gen
+    # 1. Try Gemini Gen
     try:
-        img_prompt = f"High-tech cinematic 4k futuristic header for: {state['topic']}. Professional, 16:9, no text."
+        img_prompt = f"Futuristic high-quality digital art for: {state['topic']}. Cinematic lighting, 16:9, no text."
         response = client.models.generate_content(
             model="gemini-2.0-flash",
             contents=[img_prompt],
@@ -105,34 +105,32 @@ def designer_node(state: AgentState):
     except Exception:
         print(f"⚠️ Gemini Gen failed, moving to Unsplash...")
 
-    # 2. Unsplash Fallback with Strict Validation
+    # 2. Unsplash Fallback with validation
     try:
         seed = random.randint(1, 99999)
-        keywords = "technology,ai,future"
+        keywords = "technology,ai,robotics"
         fallback_url = f"https://images.unsplash.com/featured/1200x675?{keywords}&sig={seed}"
+        res = requests.get(fallback_url, headers={'User-Agent': 'Mozilla/5.0'}, timeout=15)
         
-        headers = {'User-Agent': 'Mozilla/5.0'}
-        res = requests.get(fallback_url, headers=headers, timeout=15)
-        
-        # Verify status and content-type to avoid saving 404 HTML pages
+        # Ensure it's a real image and not a 404 error page
         if res.status_code == 200 and "image" in res.headers.get("Content-Type", ""):
             with open(img_path, "wb") as f:
                 f.write(res.content)
             return {"image_url": img_filename}
-    except Exception as e:
-        print(f"❌ Image fetch failed: {e}")
-
+    except Exception:
+        print("❌ Image acquisition failed.")
+        
     return {"image_url": ""}
 
 def auto_deploy(today_date):
-    print("🚀 Auto-Deploy: Syncing with GitHub...")
+    print("🚀 Auto-Deploy: Pushing to GitHub...")
     try:
         subprocess.run(["git", "add", "."], check=True)
-        subprocess.run(["git", "commit", "-m", f"Automated Article: {today_date}"], check=True)
+        subprocess.run(["git", "commit", "-m", f"Post update: {today_date}"], check=True)
         subprocess.run(["git", "push"], check=True)
-        print("✅ Live site update triggered.")
+        print("✅ Git Push Successful!")
     except Exception as e:
-        print(f"❌ Deploy failed: {e}")
+        print(f"❌ Git Push Failed: {e}")
 
 # --- GRAPH ---
 workflow = StateGraph(AgentState)
@@ -152,7 +150,7 @@ workflow.add_edge("editor", "designer")
 workflow.add_edge("designer", END)
 app = workflow.compile()
 
-# --- PUBLISHING ---
+# --- MAIN ---
 if __name__ == "__main__":
     final_state = app.invoke({
         "field": "AI and Robotics", 
@@ -171,29 +169,14 @@ if __name__ == "__main__":
     clean_topic = final_state['topic'].replace('"', '')
     slug = re.sub(r'[^a-z0-9]', '-', clean_topic.lower()).strip("-")[:50]
     
-    # ADVANCED CONTENT CLEANING
-    raw_content = final_state['content']
-    # 1. Deduplicate lines
-    lines = raw_content.split('\n')
-    seen = set()
-    deduped_lines = []
-    for line in lines:
-        stripped = line.strip()
-        if stripped == "" or stripped not in seen:
-            deduped_lines.append(line)
-            if stripped != "" and not stripped.startswith(">") and not stripped.startswith("##"):
-                seen.add(stripped)
-    
-    content = "\n".join(deduped_lines)
-    # 2. Final H2 label strip (Permanent instruction)
+    # Final cleanup of repetitive text and labels
+    content = final_state['content']
     content = re.sub(r'##\s*(H2|Header|Section|Title|Topic|Step):?\s*', '## ', content, flags=re.I)
-    # 3. Fix word-stuttering ("the the", "perform perform")
     content = re.sub(r'\b(\w+)(?:\s+\1\b)+', r'\1', content, flags=re.I)
     content = re.sub(r'\n{3,}', '\n\n', content).strip()
     
     image_line = ""
     if final_state['image_url']:
-        # Fix: Ensure path is relative for Jekyll
         image_line = f"image:\n  path: assets/img/{final_state['image_url']}\n  alt: \"{clean_topic}\""
 
     post_md = f"""---
@@ -211,5 +194,5 @@ categories: [AI, Technology]
     with open(f"_posts/{filename}", "w", encoding="utf-8") as f:
         f.write(post_md)
         
-    print(f"✅ Published: {filename}")
+    print(f"📝 Post Created: {filename}")
     auto_deploy(today_date)

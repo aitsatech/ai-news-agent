@@ -49,6 +49,7 @@ def architect_node(state: AgentState):
     print("📐 Architect: Planning high-impact structure...")
     prompt = f"Create a 4-section outline for '{state['topic']}'. Return ONLY titles, one per line."
     raw_sections = llm_strategy.invoke(prompt).content.split('\n')
+    # Filter out common AI-generated labels from the outline itself
     sections = [re.sub(r'^(H2|Section|Step|Title|Header|[0-9]\.)\s*:?\s*', '', s, flags=re.I).strip() 
                 for s in raw_sections if len(s.strip()) > 5]
     return {"outline": sections[:4]}
@@ -58,7 +59,7 @@ def writer_node(state: AgentState):
     print(f"✍️ Writer: Drafting {current_section}...")
     prompt = f"Write a section for: {current_section}. Research: {state['research']}. RULES: 1. No title repetition. 2. Bold 1st sentence. 3. Max 200 words. 4. Use 1 list. 5. No redundant H2 tags inside the text."
     res = llm_writer.invoke(prompt).content.strip()
-    # Add spacing before H2 to prevent "next to header" issues
+    # Apply Permanent Solution: Spacing before H2
     section_md = f"\n\n## {current_section}\n\n{res}\n"
     return {"content": state['content'] + section_md, "iteration": state['iteration'] + 1}
 
@@ -66,7 +67,7 @@ def aio_editor_node(state: AgentState):
     print("📋 Editor: Finalizing content and takeaways...")
     prompt = f"Summarize this in 3 short bullet points: {state['content'][:1000]}."
     box = llm_strategy.invoke(prompt).content
-    # Added extra padding after the Key Takeaways to separate from first H2
+    # Apply Permanent Solution: Extra padding for layout clarity
     header_box = f"> ### Key Takeaways\n>\n{box}\n\n&nbsp;\n\n" 
     return {"content": header_box + state['content']}
 
@@ -78,11 +79,11 @@ def designer_node(state: AgentState):
     img_filename = f"header-{safe_topic}-{random.randint(100,999)}.png"
     img_path = os.path.join(img_dir, img_filename)
     
-    # Retry Logic for 429 Errors
+    # Retry Logic for 429 Errors + Apex Fallback
     for attempt in range(2):
         try:
             model_to_use = "gemini-2.0-flash" if attempt == 0 else "gemini-1.5-flash"
-            img_prompt = f"A wide, high-tech, cinematic 4k header image for: {state['topic']}. No text."
+            img_prompt = f"A wide, high-tech, cinematic 4k header image for: {state['topic']}. Professional, no text."
             response = client.models.generate_content(
                 model=model_to_use,
                 contents=[img_prompt],
@@ -93,10 +94,12 @@ def designer_node(state: AgentState):
                     f.write(response.generated_images[0].image_bytes)
                 return {"image_url": img_filename}
         except Exception as e:
-            print(f"⚠️ Attempt {attempt+1} failed: {e}")
-            time.sleep(10) # Wait for quota reset
-            
-    return {"image_url": ""}
+            print(f"⚠️ Attempt {attempt+1} image gen failed: {e}")
+            if attempt == 0: time.sleep(5)
+    
+    # Apex Fallback Image (Unsplash high-quality tech source)
+    print("🚀 Using Apex Fallback Image to ensure visual integrity.")
+    return {"image_url": "https://images.unsplash.com/photo-1677442136019-21780ecad995?auto=format&fit=crop&q=80&w=1000"}
 
 def update_site_branding_avatar(state: AgentState):
     avatar_path = "assets/img/avatar.png"
@@ -113,15 +116,20 @@ def update_site_branding_avatar(state: AgentState):
 
 # --- GRAPH ---
 workflow = StateGraph(AgentState)
-workflow.add_node("scout", trend_scout_node); workflow.add_node("researcher", researcher_node)
-workflow.add_node("architect", architect_node); workflow.add_node("writer", writer_node)
-workflow.add_node("editor", aio_editor_node); workflow.add_node("designer", designer_node)
+workflow.add_node("scout", trend_scout_node)
+workflow.add_node("researcher", researcher_node)
+workflow.add_node("architect", architect_node)
+workflow.add_node("writer", writer_node)
+workflow.add_node("editor", aio_editor_node)
+workflow.add_node("designer", designer_node)
 
 workflow.set_entry_point("scout")
-workflow.add_edge("scout", "researcher"); workflow.add_edge("researcher", "architect")
+workflow.add_edge("scout", "researcher")
+workflow.add_edge("researcher", "architect")
 workflow.add_edge("architect", "writer")
 workflow.add_conditional_edges("writer", lambda x: "writer" if x['iteration'] < len(x['outline']) else "editor")
-workflow.add_edge("editor", "designer"); workflow.add_edge("designer", END)
+workflow.add_edge("editor", "designer")
+workflow.add_edge("designer", END)
 app = workflow.compile()
 
 # --- PUBLISHING ---
@@ -144,6 +152,7 @@ if __name__ == "__main__":
         stripped = line.strip()
         if stripped == "" or stripped not in seen:
             deduped_lines.append(line)
+            # Only add significant content to 'seen' to allow blank lines and headers to persist
             if stripped != "" and not stripped.startswith(">") and not stripped.startswith("##"):
                 seen.add(stripped)
     
@@ -153,11 +162,12 @@ if __name__ == "__main__":
     content = re.sub(r'##\s*(H2|Header|Section|Title|Topic|Step):?\s*', '## ', content, flags=re.I)
     content = re.sub(r'\n{3,}', '\n\n', content).strip()
     
-    # 3. Image Metadata Fix
+    # 3. Image Metadata Fix (Updated for Fallback support)
+    image_url = final_state.get('image_url')
     image_meta = ""
-    if final_state.get('image_url'):
-        # Using relative path for Chirpy assets
-        image_meta = f"image:\n  path: /assets/img/{final_state['image_url']}\n  alt: \"{clean_topic}\""
+    if image_url:
+        path_prefix = "/assets/img/" if not image_url.startswith("http") else ""
+        image_meta = f"image:\n  path: {path_prefix}{image_url}\n  alt: \"{clean_topic}\""
 
     post_md = f"""---
 layout: post
@@ -173,4 +183,4 @@ categories: [AI, Technology]
     os.makedirs("_posts", exist_ok=True)
     with open(f"_posts/{today}-{slug}.md", "w", encoding="utf-8") as f:
         f.write(post_md)
-    print(f"🚀 Article Published: {today}-{slug}.md")
+    print(f"🚀 Article Published with Graphics: {today}-{slug}.md")

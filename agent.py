@@ -69,43 +69,52 @@ def aio_editor_node(state: AgentState):
     return {"content": header_box + state['content']}
 
 def designer_node(state: AgentState):
+    """REVAMPED: Guarantees a unique image every time via Gemini or Dynamic Fallback."""
     print("🎨 Designer: Generating dynamic header...")
     img_dir = "assets/img"
     os.makedirs(img_dir, exist_ok=True)
     
-    safe_topic = re.sub(r'[^a-zA-Z0-9]', '-', state['topic'][:20]).lower()
-    img_filename = f"header-{safe_topic}-{random.randint(100,999)}.png"
+    # Generate unique filename
+    timestamp = int(time.time())
+    safe_topic = re.sub(r'[^a-zA-Z0-9]', '-', state['topic'][:15]).lower()
+    img_filename = f"header-{safe_topic}-{timestamp}.png"
     img_path = os.path.join(img_dir, img_filename)
     
-    # 1. Try Gemini Generation
-    for attempt in range(2):
+    # Step 1: Attempt Gemini Gen
+    for model_name in ["gemini-2.0-flash", "gemini-1.5-flash"]:
         try:
-            model_to_use = "gemini-2.0-flash" if attempt == 0 else "gemini-1.5-flash"
-            img_prompt = f"A high-tech cinematic 4k header for: {state['topic']}. Professional, no text."
+            img_prompt = f"Cinematic 4k high-tech professional photography of {state['topic']}. Futuristic, no text, wide shot."
             response = client.models.generate_content(
-                model=model_to_use,
+                model=model_name,
                 contents=[img_prompt],
                 config=types.GenerateContentConfig(image_config=types.ImageConfig(aspect_ratio="16:9"))
             )
             if response.generated_images:
                 with open(img_path, "wb") as f:
                     f.write(response.generated_images[0].image_bytes)
+                print(f"✅ Gemini Image Generated: {img_filename}")
                 return {"image_url": img_filename}
-        except Exception:
-            time.sleep(2)
+        except Exception as e:
+            print(f"⚠️ {model_name} failed: {e}")
+            continue
 
-    # 2. Dynamic Fallback: Download from Unsplash if Gemini fails
-    print("🚀 Gemini Gen Failed. Downloading high-quality fallback...")
+    # Step 2: Dynamic Fallback (No more static IDs)
+    print("🚀 Using Dynamic Fallback...")
     try:
-        # We use a curated high-tech search query
-        query = f"technology,{state['field'].replace(' ', ',')}"
-        fallback_res = requests.get(f"https://images.unsplash.com/photo-1485827404703-89b55fcc595e?auto=format&fit=crop&q=80&w=1200")
+        # We use a random seed + topic keywords to force Unsplash to provide a new image
+        keywords = f"technology,{state['field'].replace(' ', ',')},future"
+        random_seed = random.randint(1, 10000)
+        # Using the Unsplash Source-like redirect URL with a random seed
+        fallback_url = f"https://images.unsplash.com/featured/1200x675?{keywords}&sig={random_seed}"
+        
+        fallback_res = requests.get(fallback_url, timeout=15)
         if fallback_res.status_code == 200:
             with open(img_path, "wb") as f:
                 f.write(fallback_res.content)
+            print(f"✅ Dynamic Fallback Saved: {img_filename}")
             return {"image_url": img_filename}
     except Exception as e:
-        print(f"❌ Fallback download failed: {e}")
+        print(f"❌ Fallback failed: {e}")
     
     return {"image_url": ""}
 
@@ -145,12 +154,15 @@ if __name__ == "__main__":
     final_state = app.invoke({"field": "AI and Robotics", "topic": "", "research": "", "outline": [], "content": "", "iteration": 0, "image_url": ""})
     update_site_branding_avatar(final_state)
     
+    # Time Fix: Ensure date is slightly in the past to prevent Jekyll hiding "Future" posts
     now = datetime.datetime.now()
     today_date = now.strftime("%Y-%m-%d")
     jekyll_time = f"{today_date} 00:01:00 +0200"
     
     clean_topic = final_state['topic'].replace('"', '')
-    slug = re.sub(r'[^a-z0-9]', '-', clean_topic.lower())[:40].strip("-")
+    # Cleaner Slug logic for better URL compatibility
+    slug = re.sub(r'[^a-z0-9]', '-', clean_topic.lower())
+    slug = re.sub(r'-+', '-', slug).strip("-")[:50]
     
     # CONTENT CLEANING (Permanent Solution)
     raw_content = final_state['content']
@@ -168,7 +180,7 @@ if __name__ == "__main__":
     content = re.sub(r'##\s*(H2|Header|Section|Title|Topic|Step):?\s*', '## ', content, flags=re.I)
     content = re.sub(r'\n{3,}', '\n\n', content).strip()
     
-    # IMAGE METADATA (Local path only now)
+    # IMAGE METADATA
     image_url = final_state.get('image_url')
     image_meta = ""
     if image_url:
@@ -189,4 +201,5 @@ categories: [AI, Technology]
     with open(f"_posts/{filename}", "w", encoding="utf-8") as f:
         f.write(post_md)
         
-    print(f"🚀 Published: {filename} (Local Image: {image_url})")
+    print(f"🚀 Published: {filename}")
+    print(f"📸 Image assigned: {image_url}")

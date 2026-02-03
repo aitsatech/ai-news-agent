@@ -4,7 +4,7 @@ import random
 import datetime
 import re
 import time
-from io import BytesIO
+import subprocess
 from typing import TypedDict, List
 from langgraph.graph import StateGraph, END
 from langchain_groq import ChatGroq
@@ -69,17 +69,16 @@ def aio_editor_node(state: AgentState):
     return {"content": header_box + state['content']}
 
 def designer_node(state: AgentState):
-    """COMPLETE REVAMP: Guarantees unique images and local saving."""
-    print("🎨 Designer: Executing Triple-Safety Image Protocol...")
+    """Guarantees unique images and fixes pathing for Jekyll."""
+    print("🎨 Designer: Executing Image Protocol...")
     img_dir = "assets/img"
     os.makedirs(img_dir, exist_ok=True)
     
-    # Generate unique filename based on time to prevent overwriting
     timestamp = int(time.time())
     img_filename = f"header-{timestamp}.png"
     img_path = os.path.join(img_dir, img_filename)
     
-    # Step 1: Gemini Image Generation (Primary)
+    # 1. Gemini Gen
     try:
         img_prompt = f"High-tech cinematic 4k futuristic header for: {state['topic']}. Professional, 16:9 ratio, no text."
         response = client.models.generate_content(
@@ -90,42 +89,32 @@ def designer_node(state: AgentState):
         if response.generated_images:
             with open(img_path, "wb") as f:
                 f.write(response.generated_images[0].image_bytes)
-            print(f"✅ Gemini generated unique image: {img_filename}")
             return {"image_url": img_filename}
     except Exception as e:
-        print(f"⚠️ Gemini Gen failed ({e}), moving to Dynamic Fallback...")
+        print(f"⚠️ Gemini Gen failed, moving to Unsplash Fallback...")
 
-    # Step 2: Dynamic Fallback via Unsplash (Secondary)
-    # Using a random seed (sig) to force a different image every time
+    # 2. Unsplash Fallback
     try:
-        keywords = f"technology,{state['field'].replace(' ', ',')},futuristic"
         seed = random.randint(1, 99999)
-        # Using the direct Unsplash API endpoint for dynamic selection
+        keywords = f"technology,{state['field'].replace(' ', ',')}"
         fallback_url = f"https://images.unsplash.com/featured/1200x675?{keywords}&sig={seed}"
-        
-        headers = {'User-Agent': 'Mozilla/5.0'}
-        img_data = requests.get(fallback_url, headers=headers, timeout=15).content
-        
+        img_data = requests.get(fallback_url, headers={'User-Agent': 'Mozilla/5.0'}, timeout=15).content
         with open(img_path, "wb") as f:
             f.write(img_data)
-        print(f"✅ Dynamic Fallback saved unique image: {img_filename}")
         return {"image_url": img_filename}
-    except Exception as e:
-        print(f"❌ All image methods failed: {e}")
+    except Exception:
         return {"image_url": ""}
 
-def update_site_branding_avatar(state: AgentState):
-    avatar_path = "assets/img/avatar.png"
-    if os.path.exists(avatar_path): return
+def auto_deploy(today_date):
+    """Pushes changes to GitHub to trigger the Pages workflow."""
+    print("🚀 Auto-Deploy: Pushing to GitHub...")
     try:
-        response = client.models.generate_content(
-            model="gemini-1.5-flash",
-            contents=["A minimalist high-tech robot avatar logo"],
-            config=types.GenerateContentConfig(image_config=types.ImageConfig(aspect_ratio="1:1"))
-        )
-        with open(avatar_path, "wb") as f:
-            f.write(response.generated_images[0].image_bytes)
-    except: pass
+        subprocess.run(["git", "add", "."], check=True)
+        subprocess.run(["git", "commit", "-m", f"Post update: {today_date}"], check=True)
+        subprocess.run(["git", "push"], check=True)
+        print("✅ Git Push Successful!")
+    except Exception as e:
+        print(f"❌ Git Push Failed: {e}")
 
 # --- GRAPH ---
 workflow = StateGraph(AgentState)
@@ -145,7 +134,7 @@ workflow.add_edge("editor", "designer")
 workflow.add_edge("designer", END)
 app = workflow.compile()
 
-# --- PUBLISHING ---
+# --- MAIN ---
 if __name__ == "__main__":
     final_state = app.invoke({
         "field": "AI and Robotics", 
@@ -156,18 +145,15 @@ if __name__ == "__main__":
         "iteration": 0, 
         "image_url": ""
     })
-    update_site_branding_avatar(final_state)
     
-    # JEKYLL TIME FIX: Ensure it doesn't set a future date
     now = datetime.datetime.now()
     today_date = now.strftime("%Y-%m-%d")
-    jekyll_time = f"{today_date} 09:00:00 +0200" # Explicit morning time
+    jekyll_time = f"{today_date} 09:00:00 +0200"
     
     clean_topic = final_state['topic'].replace('"', '')
-    slug = re.sub(r'[^a-z0-9]', '-', clean_topic.lower())
-    slug = re.sub(r'-+', '-', slug).strip("-")[:50]
+    slug = re.sub(r'[^a-z0-9]', '-', clean_topic.lower()).strip("-")[:50]
     
-    # CONTENT CLEANING (Your Permanent Instruction)
+    # Cleaning
     raw_content = final_state['content']
     lines = raw_content.split('\n')
     seen = set()
@@ -183,10 +169,10 @@ if __name__ == "__main__":
     content = re.sub(r'##\s*(H2|Header|Section|Title|Topic|Step):?\s*', '## ', content, flags=re.I)
     content = re.sub(r'\n{3,}', '\n\n', content).strip()
     
-    # FRONT MATTER CONTEXT
+    # Image Front Matter (RELATIVE PATH FIX)
     image_line = ""
     if final_state['image_url']:
-        image_line = f"image:\n  path: /assets/img/{final_state['image_url']}\n  alt: \"{clean_topic}\""
+        image_line = f"image:\n  path: assets/img/{final_state['image_url']}\n  alt: \"{clean_topic}\""
 
     post_md = f"""---
 layout: post
@@ -198,12 +184,10 @@ categories: [AI, Technology]
 
 {content}"""
 
-    # Final Directory Check and Save
     os.makedirs("_posts", exist_ok=True)
     filename = f"{today_date}-{slug}.md"
-    
     with open(f"_posts/{filename}", "w", encoding="utf-8") as f:
         f.write(post_md)
         
-    print(f"🚀 Published: {filename}")
-    print(f"🖼️ Image saved to local assets: {final_state['image_url']}")
+    print(f"📝 File Created: {filename}")
+    auto_deploy(today_date)

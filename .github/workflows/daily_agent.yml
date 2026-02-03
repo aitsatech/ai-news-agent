@@ -52,9 +52,3 @@ jobs:
             git pull --rebase origin main
             git push origin main
           fi
-
-      # NEW STEP: Explicitly trigger the Deployment workflow
-      - name: Trigger Deploy
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh workflow run "Deploy Site to Pages"

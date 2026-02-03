@@ -73,16 +73,15 @@ def designer_node(state: AgentState):
     img_dir = "assets/img"
     os.makedirs(img_dir, exist_ok=True)
     
-    # Create a unique filename
     safe_topic = re.sub(r'[^a-zA-Z0-9]', '-', state['topic'][:20]).lower()
     img_filename = f"header-{safe_topic}-{random.randint(100,999)}.png"
     img_path = os.path.join(img_dir, img_filename)
     
-    # Try Gemini Image Generation first
+    # 1. Try Gemini Generation
     for attempt in range(2):
         try:
             model_to_use = "gemini-2.0-flash" if attempt == 0 else "gemini-1.5-flash"
-            img_prompt = f"A wide, high-tech, cinematic 4k header image for: {state['topic']}. Professional, no text."
+            img_prompt = f"A high-tech cinematic 4k header for: {state['topic']}. Professional, no text."
             response = client.models.generate_content(
                 model=model_to_use,
                 contents=[img_prompt],
@@ -91,18 +90,24 @@ def designer_node(state: AgentState):
             if response.generated_images:
                 with open(img_path, "wb") as f:
                     f.write(response.generated_images[0].image_bytes)
-                print(f"✅ Gemini Image saved: {img_path}")
                 return {"image_url": img_filename}
-        except Exception as e:
-            print(f"⚠️ Attempt {attempt+1} image gen failed: {e}")
-            if attempt == 0: time.sleep(3)
+        except Exception:
+            time.sleep(2)
+
+    # 2. Dynamic Fallback: Download from Unsplash if Gemini fails
+    print("🚀 Gemini Gen Failed. Downloading high-quality fallback...")
+    try:
+        # We use a curated high-tech search query
+        query = f"technology,{state['field'].replace(' ', ',')}"
+        fallback_res = requests.get(f"https://images.unsplash.com/photo-1485827404703-89b55fcc595e?auto=format&fit=crop&q=80&w=1200")
+        if fallback_res.status_code == 200:
+            with open(img_path, "wb") as f:
+                f.write(fallback_res.content)
+            return {"image_url": img_filename}
+    except Exception as e:
+        print(f"❌ Fallback download failed: {e}")
     
-    # DYNAMIC APEX FALLBACK: Pulls a fresh random image based on the topic
-    print("🚀 Using Dynamic Fallback Image for variety.")
-    search_term = state['topic'].replace(" ", ",")
-    fallback_url = f"https://source.unsplash.com/featured/1200x675?{search_term},technology,future"
-    # Note: Unsplash Source API redirects to a random image matching the query
-    return {"image_url": fallback_url}
+    return {"image_url": ""}
 
 def update_site_branding_avatar(state: AgentState):
     avatar_path = "assets/img/avatar.png"
@@ -110,7 +115,7 @@ def update_site_branding_avatar(state: AgentState):
     try:
         response = client.models.generate_content(
             model="gemini-1.5-flash",
-            contents=["A minimalist high-tech robot avatar logo, white background"],
+            contents=["A minimalist high-tech robot avatar logo"],
             config=types.GenerateContentConfig(image_config=types.ImageConfig(aspect_ratio="1:1"))
         )
         with open(avatar_path, "wb") as f:
@@ -147,7 +152,7 @@ if __name__ == "__main__":
     clean_topic = final_state['topic'].replace('"', '')
     slug = re.sub(r'[^a-z0-9]', '-', clean_topic.lower())[:40].strip("-")
     
-    # 1. Deduplicate & Clean
+    # CONTENT CLEANING (Permanent Solution)
     raw_content = final_state['content']
     lines = raw_content.split('\n')
     seen = set()
@@ -163,13 +168,11 @@ if __name__ == "__main__":
     content = re.sub(r'##\s*(H2|Header|Section|Title|Topic|Step):?\s*', '## ', content, flags=re.I)
     content = re.sub(r'\n{3,}', '\n\n', content).strip()
     
-    # 2. Image Metadata Logic
+    # IMAGE METADATA (Local path only now)
     image_url = final_state.get('image_url')
     image_meta = ""
     if image_url:
-        # If it's a local filename, use the local path. If it's a URL, use it directly.
-        path_val = f"/assets/img/{image_url}" if not image_url.startswith("http") else image_url
-        image_meta = f"image:\n  path: {path_val}\n  alt: \"{clean_topic}\""
+        image_meta = f"image:\n  path: /assets/img/{image_url}\n  alt: \"{clean_topic}\""
 
     post_md = f"""---
 layout: post
@@ -181,11 +184,9 @@ categories: [AI, Technology]
 
 {content}"""
 
-    # 3. Final Save
     os.makedirs("_posts", exist_ok=True)
     filename = f"{today_date}-{slug}.md"
     with open(f"_posts/{filename}", "w", encoding="utf-8") as f:
         f.write(post_md)
         
-    print(f"🚀 Article Published: {filename}")
-    print(f"🖼️ Image Logic: {image_url}")
+    print(f"🚀 Published: {filename} (Local Image: {image_url})")

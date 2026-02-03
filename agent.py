@@ -75,8 +75,13 @@ def writer_node(state: AgentState):
 
 def aio_editor_node(state: AgentState):
     print("📋 Editor: Finalizing content and takeaways...")
-    prompt = f"Summarize this in 3 short bullet points: {state['content'][:1000]}."
+    # UPDATED: Added "Return ONLY bullet points" to prevent conversational intro lines
+    prompt = f"Summarize this in 3 short, punchy bullet points: {state['content'][:1000]}. Return ONLY the bullet points, no introduction."
     box = llm_strategy.invoke(prompt).content.strip()
+    
+    # CLEANUP: Strip common conversational AI prefixes if they slip through
+    box = re.sub(r'^(Here are|Sure|In summary|Based on).*?\n', '', box, flags=re.I).strip()
+    
     header_box = f"> ### Key Takeaways\n>\n{box}\n\n&nbsp;\n\n" 
     return {"content": header_box + state['content']}
 
@@ -178,10 +183,19 @@ if __name__ == "__main__":
     clean_topic = final_state['topic'].replace('"', '')
     slug = re.sub(r'[^a-z0-9]', '-', clean_topic.lower()).strip("-")[:50]
     
-    # Strict regex cleaning for headers and duplicate words
+    # --- FINAL CONTENT SCRUBBING ---
     content = final_state['content']
+    
+    # 1. PERMANENT FIX: Remove "H2:" or "Header:" labels appearing next to ## headers
     content = re.sub(r'##\s*(H2|Header|Section|Title|Topic|Step):?\s*', '## ', content, flags=re.I)
+    
+    # 2. STUTTER FIX: Remove duplicate adjacent words (e.g., "Hyundai Hyundai")
     content = re.sub(r'\b(\w+)(?:\s+\1\b)+', r'\1', content, flags=re.I)
+    
+    # 3. CONVERSATIONAL FIX: Remove "Here is the section on..." lines
+    content = re.sub(r'^(Here is|This section).*?\n', '', content, flags=re.I | re.M)
+    
+    # 4. SPACING: Normalize newlines
     content = re.sub(r'\n{3,}', '\n\n', content).strip()
     
     image_line = ""

@@ -125,10 +125,22 @@ def designer_node(state: AgentState):
 def auto_deploy(today_date):
     print("🚀 Auto-Deploy: Pushing to GitHub...")
     try:
+        # Check if git user is set, if not, set a default bot identity
+        check_user = subprocess.run(["git", "config", "user.name"], capture_output=True, text=True)
+        if not check_user.stdout.strip():
+            print("👤 Setting temporary Git identity...")
+            subprocess.run(["git", "config", "user.email", "bot@automated.ai"], check=True)
+            subprocess.run(["git", "config", "user.name", "AI Content Bot"], check=True)
+
         subprocess.run(["git", "add", "."], check=True)
-        subprocess.run(["git", "commit", "-m", f"Post update: {today_date}"], check=True)
-        subprocess.run(["git", "push"], check=True)
-        print("✅ Git Push Successful!")
+        # Check if there are changes before committing
+        status = subprocess.run(["git", "status", "--porcelain"], capture_output=True, text=True)
+        if status.stdout.strip():
+            subprocess.run(["git", "commit", "-m", f"Post update: {today_date}"], check=True)
+            subprocess.run(["git", "push"], check=True)
+            print("✅ Git Push Successful!")
+        else:
+            print("∅ No changes to commit.")
     except Exception as e:
         print(f"❌ Git Push Failed: {e}")
 
@@ -177,22 +189,4 @@ if __name__ == "__main__":
     
     image_line = ""
     if final_state['image_url']:
-        image_line = f"image:\n  path: assets/img/{final_state['image_url']}\n  alt: \"{clean_topic}\""
-
-    post_md = f"""---
-layout: post
-title: "{clean_topic}"
-date: {jekyll_time}
-categories: [AI, Technology]
-{image_line}
----
-
-{content}"""
-
-    os.makedirs("_posts", exist_ok=True)
-    filename = f"{today_date}-{slug}.md"
-    with open(f"_posts/{filename}", "w", encoding="utf-8") as f:
-        f.write(post_md)
-        
-    print(f"📝 Post Created: {filename}")
-    auto_deploy(today_date)
+        image_line = f"image:\n  path: assets/img/{final_state['

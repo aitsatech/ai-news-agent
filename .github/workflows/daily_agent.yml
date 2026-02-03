@@ -6,6 +6,7 @@ on:
 
 permissions:
   contents: write
+  actions: write  # Added this to fix the 403 error
 
 jobs:
   generate-content:

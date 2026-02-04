@@ -11,7 +11,9 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-      actions: write
+      actions: write  # Needed to trigger the secondary deployment workflow
+      pages: write    # Good practice for Jekyll sites
+      id-token: write # Required if you use specific GitHub Pages actions
 
     steps:
       - name: Checkout Repository

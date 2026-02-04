@@ -2,11 +2,11 @@
 
 source "https://rubygems.org"
 
-# Core Jekyll and Chirpy Theme
+# Apex Jekyll Setup
 gem "jekyll", "~> 4.3.4"
 gem "jekyll-theme-chirpy", "~> 7.0.1"
 
-# Required plugins for Chirpy to function and display articles
+# Essential Plugins for Chirpy Functionality
 group :jekyll_plugins do
   gem "jekyll-feed"
   gem "jekyll-seo-tag"
@@ -17,13 +17,17 @@ group :jekyll_plugins do
   gem "jekyll-redirect-from"
 end
 
-# Required for Ruby 3.3+ compatibility (Standard Library gems)
-gem "csv"
-gem "base64"
+# Runtime Compatibility for Ruby 3.3 (Ensures GitHub Actions stability)
 gem "webrick"
-gem "google-protobuf", "~> 3.0" # Added to support advanced asset processing if needed
+gem "base64"
+gem "csv"
+gem "bigdecimal"
 
-# Support for different Operating Systems
+# Optimization: Handles high-performance asset compression
+gem "unicode-display_width", "~> 2.5"
+gem "terminal-table", "~> 3.0"
+
+# Performance & Environment handling
 platforms :mingw, :x64_mingw, :mswin, :jruby do
   gem "tzinfo", ">= 1", "< 3"
   gem "tzinfo-data"

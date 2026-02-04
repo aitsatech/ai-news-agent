@@ -28,7 +28,7 @@ img_path: ""
 # 'future: true' is essential so posts scheduled for '09:00:00' actually show up
 future: true
 paginate: 10
-paginate_path: "/posts/page:num/"
+paginate_path: "/page:num"
 
 plugins:
   - jekyll-feed
@@ -43,7 +43,7 @@ plugins:
 collections:
   tabs:
     output: true
-    sort_by: order
+    sort_by: date
 
 # --- DEFAULTS ---
 defaults:
@@ -52,7 +52,8 @@ defaults:
       type: posts
     values:
       layout: post
-      comments: true
+      author: Aitsa # Update this to your preferred author name
+      comments: false
       toc: true
       # Consistent permalink structure for SEO
       permalink: /posts/:title/

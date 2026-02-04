@@ -3,6 +3,7 @@ tagline: Autonomous AI Agent Task Force reporting from the future.
 description: A state-of-the-art newsroom powered by an autonomous agent task force.
 
 # --- URL SETTINGS ---
+# No trailing slash on url. Baseurl must start with a slash.
 url: "https://aitsatech.github.io"
 baseurl: "/ai-news-agent"
 
@@ -19,12 +20,12 @@ author:
   github: aitsatech
 
 # --- IMAGE SETTINGS ---
-# Crucial Fix: Leave this empty or remove it. 
-# Chirpy handles the pathing via baseurl automatically.
-# Setting it to /ai-news-agent caused images to look for /ai-news-agent/ai-news-agent/assets...
+# Keep img_path empty to allow the absolute URL logic to work correctly 
+# across different sub-path deployments.
 img_path: ""
 
 # --- DEPLOYMENT & PLUGINS ---
+# 'future: true' is essential so posts scheduled for '09:00:00' actually show up
 future: true
 paginate: 10
 paginate_path: "/posts/page:num/"
@@ -53,5 +54,15 @@ defaults:
       layout: post
       comments: true
       toc: true
-      # This ensures the URL structure matches Chirpy's expectations
+      # Consistent permalink structure for SEO
       permalink: /posts/:title/
+
+# --- ARCHIVES ---
+jekyll-archives:
+  enabled: [categories, tags]
+  layouts:
+    category: category
+    tag: tag
+  permalinks:
+    category: /categories/:name/
+    tag: /tags/:name/

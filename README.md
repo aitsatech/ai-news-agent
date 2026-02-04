@@ -1,4 +1,5 @@
 # Chirpy Starter
+[![Daily AI News Agent](https://github.com/aitsatech/ai-news-agent/actions/workflows/daily_agent.yml/badge.svg)](https://github.com/YOUR_USERNAME/ai-news-agent/actions/workflows/daily_agent.yml)
 
 [![Gem Version](https://img.shields.io/gem/v/jekyll-theme-chirpy)][gem]&nbsp;
 [![GitHub license](https://img.shields.io/github/license/cotes2020/chirpy-starter.svg?color=blue)][mit]

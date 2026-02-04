@@ -27,8 +27,8 @@ jobs:
       - name: Install Dependencies
         run: |
           python -m pip install --upgrade pip
-          # Explicitly install duckduckgo-search first to satisfy the 'ddgs' requirement
-          pip install -U duckduckgo-search
+          # We must install 'duckduckgo-search' but LangChain looks for the 'ddgs' name
+          pip install -U duckduckgo-search ddgs 
           pip install langchain langchain-groq langchain-community langgraph google-genai requests Pillow
 
       - name: Run AI News Agent

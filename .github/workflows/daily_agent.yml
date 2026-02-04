@@ -2,19 +2,16 @@ name: Daily AI Agent Content Generator
 
 on:
   schedule:
-    # Runs at 05:15 UTC every day
     - cron: '15 5 * * *'
-  workflow_dispatch: # Allows manual triggering for testing
+  workflow_dispatch:
 
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-      actions: write  # Needed to trigger the secondary deployment workflow
-      pages: write    # Good practice for Jekyll sites
-      id-token: write # Required if you use specific GitHub Pages actions
-
+      actions: write  # Critical for triggering pages-deploy.yml
+    
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -25,13 +22,12 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.10'
-          cache: 'pip' # Speeds up subsequent runs
+          cache: 'pip'
 
       - name: Install Dependencies
         run: |
           python -m pip install --upgrade pip
-          # We must install 'duckduckgo-search' but LangChain looks for the 'ddgs' name
-          pip install -U duckduckgo-search ddgs 
+          pip install -U duckduckgo-search ddgs
           pip install langchain langchain-groq langchain-community langgraph google-genai requests Pillow
 
       - name: Run AI News Agent
@@ -40,22 +36,24 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: python agent.py
 
-      - name: Commit and Push New Post
+      - name: Commit and Push
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
           
-          # Check if there are changes to commit
-          if [ -n "$(git status --porcelain)" ]; then
-            git add _posts/ assets/img/
-            git commit -m "🤖 AI Daily Update: $(date +'%Y-%m-%d')"
-            git push
+          # Stage posts and images
+          git add _posts/*.md
+          git add assets/img/*.png
+          
+          # Only commit if there are changes to avoid empty-commit errors
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
           else
-            echo "No new content generated today."
+            git commit -m "🤖 Daily Post & Asset Update: $(date +'%Y-%m-%d')"
+            git push origin main
           fi
 
       - name: Trigger Website Deployment
-        # This tells your 'pages-deploy.yml' to run immediately after the post is saved
         env:
           GH_TOKEN: ${{ github.token }}
         run: |

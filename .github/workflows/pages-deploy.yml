@@ -1,9 +1,15 @@
 name: "Deploy Site to Pages"
+
 on:
   push:
     branches:
       - main
   workflow_dispatch:
+  # This allows daily_agent.yml to trigger this deployment explicitly
+  workflow_run:
+    workflows: ["Daily AI Agent Content Generator"]
+    types:
+      - completed
 
 permissions:
   contents: read
@@ -16,7 +22,9 @@ concurrency:
 
 jobs:
   build:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
+    # Only run if the previous workflow was successful OR if it's a direct push/dispatch
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -27,11 +35,10 @@ jobs:
         uses: ruby/setup-ruby@v1
         with:
           ruby-version: '3.3'
-          bundler-cache: true # This will run 'bundle install' automatically
+          bundler-cache: true
 
-      - name: Build with Jekyll
-        # Added --trace to help us debug if it fails again
-        # Added JEKYLL_ENV: production to ensure Chirpy optimizes assets
+      - name: Build Site
+        # Chirpy theme requires initialization for search and tabs
         run: |
           bundle exec jekyll build -d _site
         env:

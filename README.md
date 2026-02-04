@@ -1,5 +1,15 @@
 # Chirpy Starter
-[![Daily AI News Agent](https://github.com/aitsatech/ai-news-agent/actions/workflows/daily_agent.yml/badge.svg)](https://github.com/YOUR_USERNAME/ai-news-agent/actions/workflows/daily_agent.yml)
+# AI News Agent 🤖
+
+[![Daily Agent Run](https://github.com/aitsatech/ai-news-agent/actions/workflows/daily_agent.yml/badge.svg)](https://github.com/aitsatech/ai-news-agent/actions/workflows/daily_agent.yml)
+[![Site Deployment](https://github.com/aitsatech/ai-news-agent/actions/workflows/pages-deploy.yml/badge.svg)](https://github.com/aitsatech/ai-news-agent/actions/workflows/pages-deploy.yml)
+
+An autonomous agent that scouts AI trends, generates high-quality technical articles, and deploys them to a Chirpy-themed Jekyll site every morning.
+
+## Project Structure
+* `agent.py`: The brain (LangGraph + Gemini + Groq).
+* `_posts/`: Where the daily news is stored.
+* `assets/img/`: AI-generated header images.
 
 [![Gem Version](https://img.shields.io/gem/v/jekyll-theme-chirpy)][gem]&nbsp;
 [![GitHub license](https://img.shields.io/github/license/cotes2020/chirpy-starter.svg?color=blue)][mit]

@@ -4,7 +4,6 @@ import random
 import datetime
 import re
 import time
-import subprocess
 from typing import TypedDict, List
 from langgraph.graph import StateGraph, END
 from langchain_groq import ChatGroq
@@ -75,11 +74,10 @@ def writer_node(state: AgentState):
 
 def aio_editor_node(state: AgentState):
     print("📋 Editor: Finalizing content and takeaways...")
-    # UPDATED: Added "Return ONLY bullet points" to prevent conversational intro lines
     prompt = f"Summarize this in 3 short, punchy bullet points: {state['content'][:1000]}. Return ONLY the bullet points, no introduction."
     box = llm_strategy.invoke(prompt).content.strip()
     
-    # CLEANUP: Strip common conversational AI prefixes if they slip through
+    # CLEANUP: Strip common conversational AI prefixes
     box = re.sub(r'^(Here are|Sure|In summary|Based on).*?\n', '', box, flags=re.I).strip()
     
     header_box = f"> ### Key Takeaways\n>\n{box}\n\n&nbsp;\n\n" 
@@ -105,8 +103,8 @@ def designer_node(state: AgentState):
             with open(img_path, "wb") as f:
                 f.write(response.generated_images[0].image_bytes)
             return {"image_url": img_filename}
-    except Exception:
-        print(f"⚠️ Gemini Gen failed, moving to Unsplash...")
+    except Exception as e:
+        print(f"⚠️ Gemini Gen failed: {e}. Moving to Unsplash...")
 
     try:
         seed = random.randint(1, 99999)
@@ -114,37 +112,14 @@ def designer_node(state: AgentState):
         fallback_url = f"https://images.unsplash.com/featured/1200x675?{keywords}&sig={seed}"
         res = requests.get(fallback_url, headers={'User-Agent': 'Mozilla/5.0'}, timeout=15)
         
-        if res.status_code == 200 and "image" in res.headers.get("Content-Type", ""):
+        if res.status_code == 200:
             with open(img_path, "wb") as f:
                 f.write(res.content)
             return {"image_url": img_filename}
-    except Exception:
-        print("❌ Image acquisition failed.")
+    except Exception as e:
+        print(f"❌ Image acquisition failed: {e}")
         
     return {"image_url": ""}
-
-def auto_deploy(today_date):
-    print("🚀 Auto-Deploy: Pushing to GitHub...")
-    try:
-        # Check if git identity is configured
-        check_user = subprocess.run(["git", "config", "user.name"], capture_output=True, text=True)
-        if not check_user.stdout.strip():
-            print("👤 Setting temporary Git identity...")
-            subprocess.run(["git", "config", "user.email", "bot@automated.ai"], check=True)
-            subprocess.run(["git", "config", "user.name", "AI Content Bot"], check=True)
-
-        subprocess.run(["git", "add", "."], check=True)
-        
-        # Only commit if there are actual changes
-        status = subprocess.run(["git", "status", "--porcelain"], capture_output=True, text=True)
-        if status.stdout.strip():
-            subprocess.run(["git", "commit", "-m", f"Post update: {today_date}"], check=True)
-            subprocess.run(["git", "push"], check=True)
-            print("✅ Git Push Successful!")
-        else:
-            print("∅ No changes to commit.")
-    except Exception as e:
-        print(f"❌ Git Push Failed: {e}")
 
 # --- GRAPH ---
 workflow = StateGraph(AgentState)
@@ -187,20 +162,28 @@ if __name__ == "__main__":
     content = final_state['content']
     
     # 1. PERMANENT FIX: Remove "H2:" or "Header:" labels appearing next to ## headers
-    content = re.sub(r'##\s*(H2|Header|Section|Title|Topic|Step):?\s*', '## ', content, flags=re.I)
+    content = re.sub(r'##\s*(H2|Header|Section|Title|Topic|Step|Outline):?\s*', '## ', content, flags=re.I)
     
-    # 2. STUTTER FIX: Remove duplicate adjacent words (e.g., "Hyundai Hyundai")
+    # 2. STUTTER FIX: Remove duplicate adjacent words
     content = re.sub(r'\b(\w+)(?:\s+\1\b)+', r'\1', content, flags=re.I)
     
-    # 3. CONVERSATIONAL FIX: Remove "Here is the section on..." lines
-    content = re.sub(r'^(Here is|This section).*?\n', '', content, flags=re.I | re.M)
+    # 3. DUPLICATE LINE FIX: Remove identical lines appearing one after another
+    lines = content.splitlines()
+    final_lines = []
+    for line in lines:
+        if not final_lines or line.strip() != final_lines[-1].strip() or line.strip() == "":
+            final_lines.append(line)
+    content = "\n".join(final_lines)
     
-    # 4. SPACING: Normalize newlines
+    # 4. CONVERSATIONAL FIX: Remove "Here is the section" lines
+    content = re.sub(r'^(Here is|This section|Below is).*?\n', '', content, flags=re.I | re.M)
+    
+    # 5. SPACING: Normalize newlines
     content = re.sub(r'\n{3,}', '\n\n', content).strip()
     
     image_line = ""
     if final_state['image_url']:
-        image_line = f"image:\n  path: assets/img/{final_state['image_url']}\n  alt: \"{clean_topic}\""
+        image_line = f"image:\n  path: /assets/img/{final_state['image_url']}\n  alt: \"{clean_topic}\""
 
     post_md = f"""---
 layout: post
@@ -217,5 +200,5 @@ categories: [AI, Technology]
     with open(f"_posts/{filename}", "w", encoding="utf-8") as f:
         f.write(post_md)
         
-    print(f"📝 Post Created: {filename}")
-    auto_deploy(today_date)
+    print(f"📝 Post Created Locally: {filename}")
+    # Git push is now handled by the .yml workflow, not the script.

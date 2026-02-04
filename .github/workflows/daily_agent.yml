@@ -11,6 +11,7 @@ jobs:
     permissions:
       contents: write
       actions: write  # Critical for triggering pages-deploy.yml
+      pages: write
     
     steps:
       - name: Checkout Repository

@@ -27,20 +27,31 @@ class AgentState(TypedDict):
 # Models
 llm_strategy = ChatGroq(model_name="llama-3.3-70b-versatile", temperature=0.3)
 llm_writer = ChatGroq(model_name="llama-3.1-8b-instant", temperature=0.5)
-search = DuckDuckGoSearchRun()
+
+# --- SEARCH RETRY WRAPPER ---
+def safe_search(query: str, max_retries=3):
+    """Resilient search wrapper to handle ddgs connection issues."""
+    search_tool = DuckDuckGoSearchRun()
+    for i in range(max_retries):
+        try:
+            return search_tool.run(query)
+        except Exception as e:
+            print(f"⚠️ Search attempt {i+1} failed: {e}")
+            time.sleep(2)
+    return "No recent search data available due to connection timeout."
 
 # --- NODES ---
 
 def trend_scout_node(state: AgentState):
     print(f"📡 Trend Scout: Finding viral breakthroughs...")
-    news = search.run(f"latest trending breakthroughs in {state['field']} 2026")
+    news = safe_search(f"latest trending breakthroughs in {state['field']} 2026")
     prompt = f"Based on this news: {news}\nPick the SINGLE most viral story for a deep-dive. Return ONLY the title."
     topic = llm_strategy.invoke(prompt).content.strip().replace('"', '')
     return {"topic": topic}
 
 def researcher_node(state: AgentState):
     print(f"🕵️ Researcher: Deep-diving into '{state['topic']}'...")
-    data = search.run(f"{state['topic']} technical details 2026")
+    data = safe_search(f"{state['topic']} technical details 2026")
     return {"research": data}
 
 def architect_node(state: AgentState):
@@ -183,6 +194,7 @@ if __name__ == "__main__":
     
     image_line = ""
     if final_state['image_url']:
+        # Note: Corrected to use the relative path required by Jekyll + baseurl
         image_line = f"image:\n  path: /assets/img/{final_state['image_url']}\n  alt: \"{clean_topic}\""
 
     post_md = f"""---
@@ -201,4 +213,3 @@ categories: [AI, Technology]
         f.write(post_md)
         
     print(f"📝 Post Created Locally: {filename}")
-    # Git push is now handled by the .yml workflow, not the script.

@@ -5,24 +5,31 @@ import datetime
 import re
 import time
 import urllib.parse
-from typing import TypedDict, List
+from typing import TypedDict, List, Literal
 from langgraph.graph import StateGraph, END
 from langchain_groq import ChatGroq
 from langchain_community.tools import DuckDuckGoSearchRun
 
+# --- CONFIGURATION: THE SOVEREIGN SYNDICATE ---
+# We use the 70b model for high-level reasoning (The Sovereigns)
+# We use the 8b model for rapid execution (The Alchemists)
+llm_sovereign = ChatGroq(model_name="llama-3.3-70b-versatile", temperature=0.1)
+llm_alchemist = ChatGroq(model_name="llama-3.1-8b-instant", temperature=0.5)
+
 class AgentState(TypedDict):
     field: str
     topic: str
-    research: str
+    research_data: str
     outline: List[str]
-    content: str
+    current_section: str
+    section_content: str
+    full_draft: str
     iteration: int
+    quality_checks: int  # Counter to prevent infinite loops
     image_url: str
+    seo_keywords: str
 
-# Models
-llm_strategy = ChatGroq(model_name="llama-3.3-70b-versatile", temperature=0.2)
-llm_writer = ChatGroq(model_name="llama-3.1-8b-instant", temperature=0.6)
-
+# --- SEARCH WRAPPER (The Deep-Data Diviner Tool) ---
 def safe_search(query: str, max_retries=3):
     search_tool = DuckDuckGoSearchRun()
     for i in range(max_retries):
@@ -31,144 +38,236 @@ def safe_search(query: str, max_retries=3):
         except Exception as e:
             print(f"⚠️ Search attempt {i+1} failed: {e}")
             time.sleep(2)
-    return "No recent search data available."
+    return "Data unavailable. Proceed with analytical inference."
 
-# --- NODES (SCOUT, RESEARCHER, ARCHITECT, WRITER, EDITOR REMAIN STABLE) ---
+# --- NODE 1: RESEARCHER DELUXE (The Deep-Data Diviner) ---
+def deep_data_diviner(state: AgentState):
+    print(f"🕵️ Researcher Deluxe: Initiating deep-scan for '{state['field']}'...")
+    
+    # Advanced query to find "story within the noise"
+    query = f"latest emerging technological breakthroughs {state['field']} 2026 technical analysis"
+    raw_data = safe_search(query)
+    
+    # Synthesize the "Story within the noise"
+    prompt = f"""
+    Analyze this raw data: {raw_data}
+    Identify the ONE most disruptive, avant-garde topic that mainstream media is missing.
+    Return ONLY the topic title. Make it intellectual and provocative.
+    """
+    topic = llm_sovereign.invoke(prompt).content.strip().replace('"', '')
+    
+    print(f"   ↳ Topic Identified: {topic}")
+    
+    # Deep dive for technical specifics
+    technical_data = safe_search(f"{topic} technical specifications implications 2026")
+    
+    return {"topic": topic, "research_data": technical_data}
 
-def trend_scout_node(state: AgentState):
-    print(f"📡 Trend Scout: Finding viral breakthroughs...")
-    news = safe_search(f"latest trending breakthroughs in {state['field']} 2026")
-    prompt = f"Based on this news: {news}\nPick the SINGLE most viral story. Return ONLY the title."
-    topic = llm_strategy.invoke(prompt).content.strip().replace('"', '')
-    return {"topic": topic}
+# --- NODE 2: SEO APEX STRATEGIST (The Search Sovereign) ---
+def seo_apex_strategist(state: AgentState):
+    print("🌐 SEO Sovereign: Mapping neural search entities...")
+    prompt = f"""
+    Generate 5 semantic SEO entities/keywords for the topic: '{state['topic']}'.
+    These must be high-value terms for 2026 search patterns.
+    Return a comma-separated list ONLY.
+    """
+    keywords = llm_alchemist.invoke(prompt).content.strip()
+    return {"seo_keywords": keywords}
 
-def researcher_node(state: AgentState):
-    print(f"🕵️ Researcher: Deep-diving into '{state['topic']}'...")
-    data = safe_search(f"{state['topic']} technical details 2026")
-    return {"research": data}
+# --- NODE 3: MASTER EDITOR-IN-CHIEF (The Neural Architect) ---
+def master_editor(state: AgentState):
+    print("🏛️ Master Editor: Calibrating the 'Soul' of the narrative...")
+    
+    prompt = f"""
+    Act as the Neural Architect. 
+    Topic: {state['topic']}
+    Data: {state['research_data']}
+    
+    Create a 4-section outline. 
+    TONE: Ruthlessly Intellectual, Avant-Garde, Prophetic.
+    The structure must be logical but defy convention.
+    Return ONLY the 4 section titles, one per line. No numbering.
+    """
+    raw_out = llm_sovereign.invoke(prompt).content
+    sections = [line.strip() for line in raw_out.split('\n') if len(line.strip()) > 5]
+    return {"outline": sections[:4], "iteration": 0, "full_draft": ""}
 
-def architect_node(state: AgentState):
-    print("📐 Architect: Planning structure...")
-    prompt = f"Create a 4-section outline for '{state['topic']}'. Titles only, one per line."
-    raw_sections = llm_strategy.invoke(prompt).content.split('\n')
-    sections = [re.sub(r'^(H2|Section|[0-9]\.)\s*:?\s*', '', s, flags=re.I).strip() 
-                for s in raw_sections if len(s.strip()) > 5]
-    return {"outline": sections[:4]}
-
-def writer_node(state: AgentState):
+# --- NODE 4: PROMPT ENGINEER COMMANDER (Ghost in the Machine) ---
+def prompt_commander(state: AgentState):
     current_section = state['outline'][state['iteration']]
-    print(f"✍️ Writer: Drafting {current_section}...")
-    prompt = f"""Role: Witty Tech Journalist. Topic: {current_section}. Context: {state['research']}.
-    RULES: Bold opener, 1 bullet list, no 'H2' labels, max 150 words. Be unique."""
-    res = llm_writer.invoke(prompt).content.strip()
-    res = re.sub(r'^(Here is|This section|Sure).*?\n', '', res, flags=re.I)
-    section_md = f"\n\n## {current_section}\n\n{res}\n"
-    return {"content": state['content'] + section_md, "iteration": state['iteration'] + 1}
+    print(f"👻 Ghost in the Machine: Designing Prime Directives for '{current_section}'...")
+    
+    prompt = f"""
+    ROLE: Apex Tech Journalist.
+    TONE: Ruthlessly Intellectual & Avant-Garde.
+    SECTION: {current_section}
+    CONTEXT: {state['research_data']}
+    KEYWORDS: {state['seo_keywords']}
+    
+    PRIME DIRECTIVES:
+    1. No corporate fluff. No "In the ever-evolving landscape."
+    2. Use precise technical vocabulary mixed with high-level philosophy.
+    3. Include one bulleted list of "Hard Truths."
+    4. Max 180 words.
+    """
+    draft = llm_alchemist.invoke(prompt).content.strip()
+    
+    # Basic cleanup
+    draft = re.sub(r'^(Here is|Sure|The section).*?\n', '', draft, flags=re.I)
+    
+    return {"section_content": draft, "current_section": current_section}
 
-def aio_editor_node(state: AgentState):
-    print("📋 Editor: Finalizing content...")
-    prompt = f"Summarize in 3 sharp 'Key Takeaways'. Content: {state['content']}"
-    box = llm_strategy.invoke(prompt).content.strip()
-    header_box = f"> ### Key Takeaways\n>\n{box}\n\n&nbsp;\n\n" 
-    return {"content": header_box + state['content']}
+# --- NODE 5: PROOFREADER GENIUS (The Syntax Sentinel) ---
+def syntax_sentinel(state: AgentState):
+    print(f"🧐 Syntax Sentinel: Auditing section {state['iteration'] + 1}...")
+    
+    content = state['section_content']
+    
+    # Forensic Audit
+    prompt = f"""
+    Audit this text for "Hallucinations" and "Fluff".
+    Text: {content}
+    
+    If it contains clichés like "game-changer" or "revolutionize", reject it.
+    If it is intellectually lazy, reject it.
+    
+    Return ONLY 'APPROVED' or 'REJECTED'.
+    """
+    verdict = llm_sovereign.invoke(prompt).content.strip().upper()
+    
+    if "REJECTED" in verdict and state.get('quality_checks', 0) < 2:
+        print("   ❌ REJECTED. Demanding rewrite...")
+        return {"quality_checks": state.get('quality_checks', 0) + 1}
+    
+    print("   ✅ APPROVED. Integrating to Matrix.")
+    
+    # Format the section
+    formatted_section = f"\n\n## {state['current_section']}\n\n{content}\n"
+    
+    return {
+        "full_draft": state['full_draft'] + formatted_section, 
+        "iteration": state['iteration'] + 1,
+        "quality_checks": 0 # Reset for next section
+    }
 
-def designer_node(state: AgentState):
-    """The Apex Zero-Dollar Designer: Real AI Generation via Pollinations"""
-    print("🎨 Designer: Executing Apex Creative Protocol...")
+# --- NODE 6: PUBLISHING KING (The Distribution Overlord) ---
+def publishing_king(state: AgentState):
+    print("👑 Publishing King: Finalizing Omni-Channel Distribution...")
+    
+    # 1. Generate The Visual Asset (via Pollinations.ai)
+    timestamp = int(time.time())
+    img_filename = f"apex-{timestamp}.png"
     img_dir = "assets/img"
     os.makedirs(img_dir, exist_ok=True)
-    
-    timestamp = int(time.time())
-    img_filename = f"header-{timestamp}.png"
     img_path = os.path.join(img_dir, img_filename)
-
-    # 1. THE PROMPT STYLIST: Create a specific visual description
-    print("🎭 Stylist: Designing AI Image Prompt...")
-    style_prompt = f"Describe a cinematic, futuristic visual scene for '{state['topic']}'. Focus on lighting and texture. No text. 25 words max."
-    visual_description = llm_strategy.invoke(style_prompt).content.strip().replace('"', '')
     
-    # 2. THE GENERATOR: Pollinations.ai (Stable Diffusion)
-    # This creates a unique image every time using the timestamp as a seed
-    encoded_prompt = urllib.parse.quote(f"{visual_description}, high-tech, cinematic lighting, 8k resolution, wide angle")
+    # Create the "Visual Concept"
+    vis_prompt = f"Describe an abstract, avant-garde, hyper-realistic image for '{state['topic']}'. Dark, neon, cinematic. 15 words max."
+    visual_concept = llm_alchemist.invoke(vis_prompt).content.strip().replace('"', '')
+    
+    encoded_prompt = urllib.parse.quote(f"{visual_concept}, 8k resolution, unreal engine 5 render, wide angle")
     gen_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1280&height=720&seed={timestamp}&nologo=true"
-
+    
     try:
-        print(f"🚀 Generating AI Image for: {state['topic']}...")
-        response = requests.get(gen_url, timeout=30)
-        if response.status_code == 200:
-            with open(img_path, "wb") as f:
-                f.write(response.content)
-            print(f"✅ AI Image Generated and Saved: {img_filename}")
-            return {"image_url": img_filename}
-    except Exception as e:
-        print(f"❌ Generation failed: {e}")
-
-    # 3. SECONDARY FALLBACK: Random Unsplash (Only if Internet is down)
-    print("🔄 Fallback: Triggering Randomized Unsplash...")
-    try:
-        keyword = state['topic'].split()[0]
-        fallback_url = f"https://images.unsplash.com/featured/1200x675?{keyword},tech&sig={timestamp}"
-        res = requests.get(fallback_url, timeout=15)
-        if res.status_code == 200:
-            with open(img_path, "wb") as f:
-                f.write(res.content)
-            return {"image_url": img_filename}
+        requests.get(gen_url, timeout=30)
+        # Pollinations saves directly via URL, but we download for persistence
+        with open(img_path, "wb") as f:
+            f.write(requests.get(gen_url).content)
+        final_img_url = img_filename
+        print(f"   🖼️ Asset Secured: {img_filename}")
     except:
-        pass
-        
-    return {"image_url": ""}
+        final_img_url = ""
+        print("   ⚠️ Visual Asset Failed. Using fallback.")
 
-# --- GRAPH ---
+    # 2. Final Polish (Key Takeaways)
+    summary_prompt = f"Summarize this entire article into 3 'Prophetic Insights'. Article: {state['full_draft']}"
+    takeaways = llm_sovereign.invoke(summary_prompt).content.strip()
+    takeaways = re.sub(r'^(Here are|Sure).*?\n', '', takeaways, flags=re.I)
+    
+    final_content = f"> ### Prophetic Insights\n>\n{takeaways}\n\n&nbsp;\n\n{state['full_draft']}"
+    
+    return {"content": final_content, "image_url": final_img_url}
+
+# --- CONDITIONAL ROUTING ---
+def quality_router(state: AgentState) -> Literal["rewrite", "next", "finalize"]:
+    # If rejected and under retry limit -> Rewrite
+    if state.get('quality_checks', 0) > 0:
+        return "rewrite"
+    # If more sections needed -> Next
+    if state['iteration'] < len(state['outline']):
+        return "next"
+    # Done -> Finalize
+    return "finalize"
+
+# --- GRAPH CONSTRUCTION ---
 workflow = StateGraph(AgentState)
-workflow.add_node("scout", trend_scout_node)
-workflow.add_node("researcher", researcher_node)
-workflow.add_node("architect", architect_node)
-workflow.add_node("writer", writer_node)
-workflow.add_node("editor", aio_editor_node)
-workflow.add_node("designer", designer_node)
 
-workflow.set_entry_point("scout")
-workflow.add_edge("scout", "researcher")
-workflow.add_edge("researcher", "architect")
-workflow.add_edge("architect", "writer")
-workflow.add_conditional_edges("writer", lambda x: "writer" if x['iteration'] < len(x['outline']) else "editor")
-workflow.add_edge("editor", "designer")
-workflow.add_edge("designer", END)
+# Add Nodes
+workflow.add_node("researcher", deep_data_diviner)
+workflow.add_node("seo_strategist", seo_apex_strategist)
+workflow.add_node("editor", master_editor)
+workflow.add_node("writer", prompt_commander)
+workflow.add_node("auditor", syntax_sentinel)
+workflow.add_node("publisher", publishing_king)
+
+# Set Edges
+workflow.set_entry_point("researcher")
+workflow.add_edge("researcher", "seo_strategist")
+workflow.add_edge("seo_strategist", "editor")
+workflow.add_edge("editor", "writer")
+workflow.add_edge("writer", "auditor")
+
+# Conditional Logic from Auditor
+workflow.add_conditional_edges(
+    "auditor",
+    quality_router,
+    {
+        "rewrite": "writer",
+        "next": "writer",
+        "finalize": "publisher"
+    }
+)
+
+workflow.add_edge("publisher", END)
 app = workflow.compile()
 
-# --- EXECUTION ---
+# --- MAIN EXECUTION ---
 if __name__ == "__main__":
+    print("🔮 THE SOVEREIGN INTELLIGENCE SYNDICATE IS ONLINE.")
+    
     final_state = app.invoke({
-        "field": "AI and Data Science", 
-        "topic": "", "research": "", "outline": [], "content": "", "iteration": 0, "image_url": ""
+        "field": "Artificial Intelligence & Robotics",
+        "topic": "",
+        "research_data": "",
+        "seo_keywords": "",
+        "outline": [],
+        "current_section": "",
+        "section_content": "",
+        "full_draft": "",
+        "iteration": 0,
+        "quality_checks": 0,
+        "image_url": ""
     })
     
+    # Save File Logic
     now = datetime.datetime.now()
     today_date = now.strftime("%Y-%m-%d")
-    clean_topic = final_state['topic']
+    clean_topic = final_state['topic'].replace('"', '').strip()
     slug = re.sub(r'[^a-z0-9]', '-', clean_topic.lower()).strip("-")[:50]
     
-    # Final Content Scrubbing (Addressing your 2026nd request for no duplicate lines/tags)
+    # Final Formatting Scrub (The DevOps Safety Net)
     content = final_state['content']
-    content = re.sub(r'##\s*(H2|Header|Section|Title):?\s*', '## ', content, flags=re.I)
+    content = re.sub(r'##\s*(H2|Header|Section):?\s*', '## ', content, flags=re.I)
     
-    lines = content.splitlines()
-    unique_lines = []
-    for line in lines:
-        if not unique_lines or line.strip() != unique_lines[-1].strip() or line.strip() == "":
-            unique_lines.append(line)
-    content = "\n".join(unique_lines)
-
-    # Path logic for Chirpy
-    img_display_path = f"/assets/img/{final_state['image_url']}" if final_state['image_url'] else "https://images.unsplash.com/photo-1614728263952-84ea256f9679?w=1200"
-
+    img_path_str = f"/assets/img/{final_state['image_url']}" if final_state['image_url'] else "https://images.unsplash.com/photo-1518770660439-4636190af475?w=1200"
+    
     post_md = f"""---
 layout: post
 title: "{clean_topic}"
 date: {today_date} 09:00:00 +0200
-categories: [AI, Technology]
+categories: [Apex, Technology]
 image:
-  path: {img_display_path}
+  path: {img_path_str}
   alt: "{clean_topic}"
 ---
 
@@ -177,4 +276,5 @@ image:
     os.makedirs("_posts", exist_ok=True)
     with open(f"_posts/{today_date}-{slug}.md", "w", encoding="utf-8") as f:
         f.write(post_md)
-    print(f"✅ Apex Article Published: {today_date}-{slug}.md")
+        
+    print(f"🚀 PUBLISHED: {today_date}-{slug}.md")

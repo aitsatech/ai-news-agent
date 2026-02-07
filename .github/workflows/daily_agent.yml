@@ -30,8 +30,11 @@ jobs:
       - name: Install Dependencies
         run: |
           python -m pip install --upgrade pip
-          # Added -U and explicit duckduckgo-search to fix the 'ddgs' ImportError
-          pip install -U google-genai pillow langgraph langchain-groq langchain-community requests duckduckgo-search
+          # Force a clean install of the specific search package and its alias
+          pip uninstall -y duckduckgo-search
+          pip install -U duckduckgo-search ddgs
+          # Install the rest
+          pip install google-genai pillow langgraph langchain-groq langchain-community requests
 
       - name: Run Sovereign Intelligence Syndicate
         id: run_agent

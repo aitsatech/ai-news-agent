@@ -159,7 +159,30 @@ def publishing_king(state: AgentState):
             pass
 
     if not success:
-        print("⚠️ Image generation failed. Falling back to default header image.")
+        print("⚠️ Image generation failed. Falling back to Unsplash keyword image.")
+        try:
+            keyword_source = state.get("seo_keywords") or state["topic"]
+            encoded = urllib.parse.quote(keyword_source[:60])
+            res = requests.get(
+                f"https://source.unsplash.com/1600x900/?{encoded}", timeout=15
+            )
+            if res.status_code == 200:
+                content_type = res.headers.get("Content-Type", "").lower()
+                img_ext = "jpg"
+                if "image/png" in content_type:
+                    img_ext = "png"
+                elif "image/webp" in content_type:
+                    img_ext = "webp"
+                img_filename = f"{img_basename}-unsplash.{img_ext}"
+                img_path = os.path.join(img_dir, img_filename)
+                with open(img_path, "wb") as f:
+                    f.write(res.content)
+                success = True
+        except Exception:
+            pass
+
+    if not success:
+        print("⚠️ Unsplash fallback failed. Using default header image.")
         img_filename = "aitsa.png"
 
     date_str = datetime.date.today().strftime("%Y-%m-%d")

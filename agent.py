@@ -33,9 +33,17 @@ class AgentState(TypedDict):
 # --- 2. NODES ---
 
 def deep_data_diviner(state: AgentState):
-    print(f"🕵️ Researcher: Scouting technical niche...")
-    query = f"latest {state['field']} breakthroughs 2026"
-    raw_data = DuckDuckGoSearchRun().run(query)
+    print(f"🕵️ Researcher: Scouting {state['field']} breakthroughs...")
+    # Stabilized search tool initialization
+    search = DuckDuckGoSearchRun()
+    query = f"latest {state['field']} breakthroughs 2026 technical news"
+    
+    try:
+        raw_data = search.run(query)
+    except Exception as e:
+        print(f"⚠️ Search failed, using fallback. Error: {e}")
+        raw_data = f"Recent breakthroughs in {state['field']} focusing on scalability and efficiency."
+
     prompt = f"Data: {raw_data}\nIdentify the single most technical niche topic. Return ONLY the title."
     topic = llm_sovereign.invoke(prompt).content.strip().replace('"', '')
     return {"topic": topic, "research_data": raw_data}
@@ -46,7 +54,7 @@ def seo_apex_strategist(state: AgentState):
     return {"seo_keywords": keywords}
 
 def master_editor(state: AgentState):
-    print("🏛️ Master Editor: Structuring narrative...")
+    print(f"🏛️ Master Editor: Structuring narrative for {state['topic']}...")
     prompt = f"Create a 4-section technical outline for: {state['topic']}. Return ONLY section titles, 1 per line."
     raw_out = llm_sovereign.invoke(prompt).content
     sections = [line.strip() for line in raw_out.split('\n') if len(line.strip()) > 5]
@@ -56,10 +64,9 @@ def prompt_commander(state: AgentState):
     current_section = state['outline'][state['iteration']]
     iteration = state['iteration']
     
-    # IMPROVED: Focus logic to reduce repetition
     focus = "overview and current news" if iteration == 0 else "technical deep-dive and specific implementation details"
     
-    print(f"👻 Writer: Drafting {current_section}...")
+    print(f"👻 Writer: Drafting section {iteration + 1}: {current_section}...")
     prompt = f"""
     SECTION: {current_section}
     FOCUS: {focus}
@@ -68,47 +75,53 @@ def prompt_commander(state: AgentState):
     - No headers, titles, or intros.
     - DO NOT repeat facts already mentioned in previous sections.
     - Start immediately with the content.
+    - Use technical, professional language.
     """
     draft = llm_alchemist.invoke(prompt).content.strip()
     return {"section_content": draft, "current_section": current_section}
 
 def syntax_sentinel(state: AgentState):
-    """PERMANENT SOLUTION: Removes H2 tags and Duplicate Titles."""
+    """Removes H2 tags and Duplicate Titles to ensure clean Jekyll formatting."""
     content = state['section_content']
     section_title = state['current_section'].strip()
-    # Removes any markdown headers produced by the LLM
+    
+    # Remove any markdown headers (#) or literal 'h2:' tags
     clean = re.sub(r'(?i)^#+.*$', '', content, flags=re.MULTILINE)
     clean = re.sub(r'(?i)^h2:.*$', '', clean, flags=re.MULTILINE)
+    
     lines = clean.split('\n')
-    # Removes lines that match the section title exactly
+    # Filter out lines that repeat the title
     filtered_lines = [l for l in lines if l.strip().lower() != section_title.lower() and l.strip()]
+    
     final_body = "\n\n".join(filtered_lines)
+    # Wrap in clean H2 tags for the final draft
     formatted_section = f"\n\n## {section_title}\n\n{final_body}\n"
+    
     return {"full_draft": state['full_draft'] + formatted_section, "iteration": state['iteration'] + 1}
 
 def publishing_king(state: AgentState):
     print("👑 Publisher: Finalizing and Saving...")
     
-    # FIXED: Generate timestamp ONCE for both file and markdown path
     timestamp = int(time.time())
     img_filename = f"apex-{timestamp}.png"
     img_dir = "assets/img"
-    img_path = os.path.join(img_dir, img_filename)
     os.makedirs(img_dir, exist_ok=True)
+    img_path = os.path.join(img_dir, img_filename)
     
+    # Image Generation logic
     success = False
     try:
         response = client.models.generate_images(
             model='imagen-3.0-generate-001',
-            prompt=f"Futuristic tech visual for {state['topic']}",
+            prompt=f"Futuristic professional tech visual for {state['topic']}, digital art style, high resolution",
             config=types.GenerateImagesConfig(number_of_images=1)
         )
         if response.generated_images:
             with open(img_path, "wb") as f:
                 f.write(response.generated_images[0].image_bytes)
             success = True
-            print(f"   ✅ Image saved: {img_path}")
-    except: pass
+    except Exception as e:
+        print(f"⚠️ Imagen failed: {e}")
 
     if not success:
         try:
@@ -118,33 +131,32 @@ def publishing_king(state: AgentState):
                 with open(img_path, "wb") as f:
                     f.write(res.content)
                 success = True
-                print(f"   ✅ Fallback image saved: {img_path}")
         except: pass
 
-    # File Saving
+    # File Saving Configuration
     date_str = datetime.date.today().strftime("%Y-%m-%d")
     date_full = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S +0000")
     safe_slug = re.sub(r'[^a-z0-9-]', '', state['topic'].lower().replace(' ', '-'))[:50]
     
-    post_filename = f"{date_str}-{safe_slug}.md"
-    post_path = os.path.join("_posts", post_filename)
+    post_path = os.path.join("_posts", f"{date_str}-{safe_slug}.md")
     os.makedirs("_posts", exist_ok=True)
 
-    header = "---\n"
-    header += f"title: \"{state['topic']}\"\n"
-    header += f"date: {date_full}\n"
-    header += f"categories: [{state['field']}]\n"
-    header += f"tags: [{state['seo_keywords']}]\n"
-    header += "image:\n"
-    header += f"  path: /assets/img/{img_filename}\n"
-    header += "---\n\n"
-    
+    header = f"""---
+title: "{state['topic']}"
+date: {date_full}
+categories: [{state['field']}]
+tags: [{state['seo_keywords']}]
+image:
+  path: /assets/img/{img_filename}
+---
+
+"""
     final_markdown = header + state['full_draft']
     
     with open(post_path, "w", encoding='utf-8') as f:
         f.write(final_markdown)
         
-    print(f"   ✅ ARTICLE SAVED: {post_path}")
+    print(f"✅ ARTICLE SAVED: {post_path}")
     return {"content": final_markdown, "image_url": img_filename}
 
 # --- 3. GRAPH & RUNTIME ---
@@ -169,4 +181,5 @@ workflow.add_edge("publisher", END)
 app = workflow.compile()
 
 if __name__ == "__main__":
-    app.invoke({"field": "Quantum Computing", "full_draft": "", "iteration": 0})
+    # You can change the 'field' here to target different tech sectors
+    app.invoke({"field": "Artificial Intelligence", "full_draft": "", "iteration": 0})

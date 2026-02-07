@@ -2,7 +2,7 @@ import os
 import requests
 import re
 import time
-import datetime  # Added for timestamping files
+import datetime
 import urllib.parse
 from google import genai 
 from google.genai import types 
@@ -55,56 +55,68 @@ def master_editor(state: AgentState):
 def prompt_commander(state: AgentState):
     current_section = state['outline'][state['iteration']]
     print(f"👻 Writer: Drafting {current_section}...")
-    prompt = f"""
-    SECTION: {current_section}
-    CONTEXT: {state['research_data']}
-    CONSTRAINTS: 
-    - No headers or titles. 
-    - Start immediately with the content.
-    - No introductory phrases.
-    """
+    prompt = f"SECTION: {current_section}\nCONTEXT: {state['research_data']}\nCONSTRAINTS: No headers, titles, or intros."
     draft = llm_alchemist.invoke(prompt).content.strip()
     return {"section_content": draft, "current_section": current_section}
 
 def syntax_sentinel(state: AgentState):
-    """
-    PERMANENT SOLUTION: Hard-strips H2 tags and Duplicate Lines.
-    """
+    """PERMANENT SOLUTION: Removes H2 tags and Duplicate Titles."""
     content = state['section_content']
     section_title = state['current_section'].strip()
-    
-    # 1. Regex Strip
     clean = re.sub(r'(?i)^#+.*$', '', content, flags=re.MULTILINE)
     clean = re.sub(r'(?i)^h2:.*$', '', clean, flags=re.MULTILINE)
-    
-    # 2. Logic Strip
     lines = clean.split('\n')
     filtered_lines = [l for l in lines if l.strip().lower() != section_title.lower() and l.strip()]
-    
     final_body = "\n\n".join(filtered_lines)
-    
     formatted_section = f"\n\n## {section_title}\n\n{final_body}\n"
-    
-    return {
-        "full_draft": state['full_draft'] + formatted_section, 
-        "iteration": state['iteration'] + 1
-    }
+    return {"full_draft": state['full_draft'] + formatted_section, "iteration": state['iteration'] + 1}
 
 def publishing_king(state: AgentState):
     print("👑 Publisher: Finalizing and Saving...")
-    
-    # --- 1. Image Generation Logic (Maintained) ---
     timestamp = int(time.time())
     img_filename = f"apex-{timestamp}.png"
     img_path = os.path.join("assets/img", img_filename)
     os.makedirs("assets/img", exist_ok=True)
     
-    img_prompt = f"Cinematic tech visual for {state['topic']}, 8k, futuristic."
-    short_prompt = f"Technology {state['topic']} futuristic"
     success = False
-    
-    # Provider 1: Gemini
-    print("   🎨 Attempting Nano Banana (Imagen 3)...")
+    # FIXED STRING LITERAL BELOW
+    print("   🎨 Attempting Nano Banana...")
     try:
         response = client.models.generate_images(
-            model='
+            model='imagen-3.0-generate-001',
+            prompt=f"Futuristic tech: {state['topic']}",
+            config=types.GenerateImagesConfig(number_of_images=1)
+        )
+        if response.generated_images:
+            with open(img_path, "wb") as f:
+                f.write(response.generated_images[0].image_bytes)
+            success = True
+            print("   ✅ Image saved via Nano Banana")
+    except Exception:
+        print("   ⚠️ Nano Banana skipped.")
+
+    if not success:
+        print("   🎨 Attempting Pollinations...")
+        try:
+            encoded = urllib.parse.quote(state['topic'][:50])
+            url = f"https://image.pollinations.ai/prompt/{encoded}?nologo=true"
+            res = requests.get(url, timeout=15)
+            if res.status_code == 200:
+                with open(img_path, "wb") as f:
+                    f.write(res.content)
+                success = True
+        except: pass
+
+    # File Saving Logic
+    date_str = datetime.date.today().strftime("%Y-%m-%d")
+    date_full = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S +0000")
+    slug = state['topic'].lower().replace(' ', '-').replace(':', '')[:50]
+    
+    post_filename = f"{date_str}-{slug}.md"
+    post_path = os.path.join("_posts", post_filename)
+    os.makedirs("_posts", exist_ok=True)
+    
+    final_content = f"""---
+title: "{state['topic']}"
+date: {date_full}
+categories:

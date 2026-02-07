@@ -1,11 +1,10 @@
 import os
 import requests
-import random
 import datetime
 import re
 import time
 import urllib.parse
-from typing import TypedDict, List, Literal
+from typing import TypedDict, List
 from langgraph.graph import StateGraph, END
 from langchain_groq import ChatGroq
 from langchain_community.tools import DuckDuckGoSearchRun
@@ -26,7 +25,7 @@ class AgentState(TypedDict):
     quality_checks: int
     image_url: str
     seo_keywords: str
-    content: str  # FIXED: Added missing key to prevent KeyError
+    content: str 
 
 # --- SEARCH WRAPPER ---
 def safe_search(query: str, max_retries=3):
@@ -96,7 +95,6 @@ def syntax_sentinel(state: AgentState):
     print(f"🧐 Syntax Sentinel: Auditing section {state['iteration'] + 1}...")
     content = state['section_content']
     
-    # Audit for fluff
     verdict_prompt = f"Does this text contain corporate fluff or clichés? Text: {content}\nReturn ONLY 'APPROVED' or 'REJECTED'."
     verdict = llm_sovereign.invoke(verdict_prompt).content.strip().upper()
     
@@ -120,53 +118,42 @@ def syntax_sentinel(state: AgentState):
 def publishing_king(state: AgentState):
     print("👑 Publishing King: Finalizing Omni-Channel Distribution...")
     
-    # 1. ROBUST IMAGE ACQUISITION
     timestamp = int(time.time())
     img_filename = f"apex-{timestamp}.png"
     img_dir = "assets/img"
     os.makedirs(img_dir, exist_ok=True)
     img_path = os.path.join(img_dir, img_filename)
     
-    # Generate Visual Concept
-    vis_prompt = f"Abstract hyper-realistic concept: {state['topic'][:50]}. Cinematic lighting, 8k, futuristic."
-    visual_concept = llm_alchemist.invoke(vis_prompt).content.strip().replace('"', '')
-    encoded_prompt = urllib.parse.quote(visual_concept)
-    
-    # Use 'nofeed' to ensure direct image data
+    vis_prompt = f"Hyper-realistic biometric concept: {state['topic'][:50]}. Cinematic, 8k, futuristic."
+    encoded_prompt = urllib.parse.quote(vis_prompt)
     gen_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1280&height=720&seed={timestamp}&nologo=true&nofeed=true"
     
     final_img_url = ""
-    try:
-        print(f"   🎨 Requesting generation for: {img_filename}...")
-        response = requests.get(gen_url, timeout=60) # Increased timeout
-        
-        if response.status_code == 200:
-            content_type = response.headers.get('content-type', '')
-            
-            # Verify the response is an actual image
-            if 'image' in content_type:
+    # RETRY LOGIC for the 502/504 errors
+    for attempt in range(3):
+        try:
+            print(f"   🎨 Requesting generation (Attempt {attempt+1})...")
+            response = requests.get(gen_url, timeout=60)
+            if response.status_code == 200 and 'image' in response.headers.get('content-type', ''):
                 with open(img_path, "wb") as f:
                     f.write(response.content)
-                
-                # Verify file size (must be > 10KB to be a valid generation)
                 if os.path.getsize(img_path) > 10000:
                     final_img_url = img_filename
-                    print(f"   ✅ Asset Secured: {img_filename} ({os.path.getsize(img_path)//1024} KB)")
-                else:
-                    print("   ❌ Verification Failed: File size too small (likely corrupted).")
-                    if os.path.exists(img_path): os.remove(img_path)
+                    print(f"   ✅ Asset Secured: {img_filename}")
+                    break
             else:
-                print(f"   ❌ Verification Failed: API returned {content_type} instead of image.")
-        else:
-            print(f"   ❌ API Error: Status {response.status_code}")
-            
-    except Exception as e:
-        print(f"   ⚠️ Visual Asset Failed: {e}")
+                print(f"   ⚠️ API busy (Status {response.status_code}). Retrying...")
+                time.sleep(5)
+        except Exception as e:
+            print(f"   ⚠️ Attempt {attempt+1} failed: {e}")
+            time.sleep(5)
 
-    # 2. FINAL POLISH & PROPHETIC INSIGHTS
-    summary_prompt = f"Synthesize these 3 'Prophetic Insights' for 2026 based on: {state['full_draft']}"
+    # Generate Prophetic Insights
+    summary_prompt = f"Synthesize 3 'Prophetic Insights' for 2026 based on: {state['full_draft']}"
     takeaways = llm_sovereign.invoke(summary_prompt).content.strip()
-    takeaways = re.sub(r'^(Here are|Sure).*?\n', '', takeaways, flags=re.I)
+    
+    # PERMANENT SOLUTION: Strip LLM preamble ("Based on...", "Here are...")
+    takeaways = re.sub(r'^.*?(synthesis|insights|here are|sure).*?:\n*', '', takeaways, flags=re.I | re.S).strip()
     
     final_content = f"> ### Prophetic Insights\n>\n{takeaways}\n\n{state['full_draft']}"
     
@@ -213,7 +200,7 @@ if __name__ == "__main__":
     today_date = now.strftime("%Y-%m-%d")
     slug = re.sub(r'[^a-z0-9]', '-', final_state['topic'].lower()).strip("-")[:50]
     
-    # leading slash included; remove if your theme (like Chirpy) requires relative paths
+    # Fixed Pathing
     img_path_str = f"/assets/img/{final_state['image_url']}" if final_state['image_url'] else ""
     
     post_md = f"""---

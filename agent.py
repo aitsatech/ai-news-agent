@@ -56,8 +56,8 @@ def prompt_commander(state: AgentState):
     current_section = state['outline'][state['iteration']]
     iteration = state['iteration']
     
-    # Context logic: Focus on news first, then deep dive to avoid repetition
-    focus = "overview and current news" if iteration == 0 else "technical deep-dive and unique implications"
+    # IMPROVED: Focus logic to reduce repetition
+    focus = "overview and current news" if iteration == 0 else "technical deep-dive and specific implementation details"
     
     print(f"👻 Writer: Drafting {current_section}...")
     prompt = f"""
@@ -66,7 +66,7 @@ def prompt_commander(state: AgentState):
     CONTEXT: {state['research_data']}
     CONSTRAINTS: 
     - No headers, titles, or intros.
-    - DO NOT repeat facts already mentioned in general news.
+    - DO NOT repeat facts already mentioned in previous sections.
     - Start immediately with the content.
     """
     draft = llm_alchemist.invoke(prompt).content.strip()
@@ -76,9 +76,11 @@ def syntax_sentinel(state: AgentState):
     """PERMANENT SOLUTION: Removes H2 tags and Duplicate Titles."""
     content = state['section_content']
     section_title = state['current_section'].strip()
+    # Removes any markdown headers produced by the LLM
     clean = re.sub(r'(?i)^#+.*$', '', content, flags=re.MULTILINE)
     clean = re.sub(r'(?i)^h2:.*$', '', clean, flags=re.MULTILINE)
     lines = clean.split('\n')
+    # Removes lines that match the section title exactly
     filtered_lines = [l for l in lines if l.strip().lower() != section_title.lower() and l.strip()]
     final_body = "\n\n".join(filtered_lines)
     formatted_section = f"\n\n## {section_title}\n\n{final_body}\n"
@@ -86,12 +88,14 @@ def syntax_sentinel(state: AgentState):
 
 def publishing_king(state: AgentState):
     print("👑 Publisher: Finalizing and Saving...")
+    
+    # FIXED: Generate timestamp ONCE for both file and markdown path
     timestamp = int(time.time())
     img_filename = f"apex-{timestamp}.png"
-    img_path = os.path.join("assets/img", img_filename)
-    os.makedirs("assets/img", exist_ok=True)
+    img_dir = "assets/img"
+    img_path = os.path.join(img_dir, img_filename)
+    os.makedirs(img_dir, exist_ok=True)
     
-    # Image Generation
     success = False
     try:
         response = client.models.generate_images(
@@ -103,6 +107,7 @@ def publishing_king(state: AgentState):
             with open(img_path, "wb") as f:
                 f.write(response.generated_images[0].image_bytes)
             success = True
+            print(f"   ✅ Image saved: {img_path}")
     except: pass
 
     if not success:
@@ -113,6 +118,7 @@ def publishing_king(state: AgentState):
                 with open(img_path, "wb") as f:
                     f.write(res.content)
                 success = True
+                print(f"   ✅ Fallback image saved: {img_path}")
         except: pass
 
     # File Saving
@@ -129,7 +135,8 @@ def publishing_king(state: AgentState):
     header += f"date: {date_full}\n"
     header += f"categories: [{state['field']}]\n"
     header += f"tags: [{state['seo_keywords']}]\n"
-    header += f"image:\n  path: /assets/img/{img_filename}\n"
+    header += "image:\n"
+    header += f"  path: /assets/img/{img_filename}\n"
     header += "---\n\n"
     
     final_markdown = header + state['full_draft']

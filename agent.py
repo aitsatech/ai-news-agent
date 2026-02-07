@@ -1,76 +1,3 @@
-import os
-import requests
-import re
-import time
-import datetime
-import urllib.parse
-from google import genai 
-from google.genai import types 
-from typing import TypedDict, List
-from langgraph.graph import StateGraph, END
-from langchain_groq import ChatGroq
-from langchain_community.tools import DuckDuckGoSearchRun
-
-# --- CONFIGURATION ---
-client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
-
-llm_sovereign = ChatGroq(model_name="llama-3.3-70b-versatile", temperature=0.1)
-llm_alchemist = ChatGroq(model_name="llama-3.1-8b-instant", temperature=0.5)
-
-class AgentState(TypedDict):
-    field: str
-    topic: str
-    research_data: str
-    outline: List[str]
-    current_section: str
-    section_content: str
-    full_draft: str
-    iteration: int
-    image_url: str
-    seo_keywords: str
-    content: str 
-
-# --- NODES ---
-
-def deep_data_diviner(state: AgentState):
-    print(f"🕵️ Researcher: Scouting technical niche...")
-    query = f"latest {state['field']} breakthroughs 2026"
-    raw_data = DuckDuckGoSearchRun().run(query)
-    prompt = f"Data: {raw_data}\nIdentify the single most technical niche topic. Return ONLY the title."
-    topic = llm_sovereign.invoke(prompt).content.strip().replace('"', '')
-    return {"topic": topic, "research_data": raw_data}
-
-def seo_apex_strategist(state: AgentState):
-    prompt = f"Provide 5 SEO keywords for '{state['topic']}'. Comma-separated ONLY."
-    keywords = llm_alchemist.invoke(prompt).content.strip()
-    return {"seo_keywords": keywords}
-
-def master_editor(state: AgentState):
-    print("🏛️ Master Editor: Structuring narrative...")
-    prompt = f"Create a 4-section technical outline for: {state['topic']}. Return ONLY section titles, 1 per line."
-    raw_out = llm_sovereign.invoke(prompt).content
-    sections = [line.strip() for line in raw_out.split('\n') if len(line.strip()) > 5]
-    return {"outline": sections[:4], "iteration": 0, "full_draft": ""}
-
-def prompt_commander(state: AgentState):
-    current_section = state['outline'][state['iteration']]
-    print(f"👻 Writer: Drafting {current_section}...")
-    prompt = f"SECTION: {current_section}\nCONTEXT: {state['research_data']}\nCONSTRAINTS: No headers, titles, or intros."
-    draft = llm_alchemist.invoke(prompt).content.strip()
-    return {"section_content": draft, "current_section": current_section}
-
-def syntax_sentinel(state: AgentState):
-    """PERMANENT SOLUTION: Removes H2 tags and Duplicate Titles."""
-    content = state['section_content']
-    section_title = state['current_section'].strip()
-    clean = re.sub(r'(?i)^#+.*$', '', content, flags=re.MULTILINE)
-    clean = re.sub(r'(?i)^h2:.*$', '', clean, flags=re.MULTILINE)
-    lines = clean.split('\n')
-    filtered_lines = [l for l in lines if l.strip().lower() != section_title.lower() and l.strip()]
-    final_body = "\n\n".join(filtered_lines)
-    formatted_section = f"\n\n## {section_title}\n\n{final_body}\n"
-    return {"full_draft": state['full_draft'] + formatted_section, "iteration": state['iteration'] + 1}
-
 def publishing_king(state: AgentState):
     print("👑 Publisher: Finalizing and Saving...")
     timestamp = int(time.time())
@@ -79,44 +6,53 @@ def publishing_king(state: AgentState):
     os.makedirs("assets/img", exist_ok=True)
     
     success = False
-    # FIXED STRING LITERAL BELOW
-    print("   🎨 Attempting Nano Banana...")
+    # 1. Image Logic (simplified for stability)
     try:
         response = client.models.generate_images(
             model='imagen-3.0-generate-001',
-            prompt=f"Futuristic tech: {state['topic']}",
+            prompt=f"Futuristic tech visual: {state['topic']}",
             config=types.GenerateImagesConfig(number_of_images=1)
         )
         if response.generated_images:
             with open(img_path, "wb") as f:
                 f.write(response.generated_images[0].image_bytes)
             success = True
-            print("   ✅ Image saved via Nano Banana")
-    except Exception:
+    except:
         print("   ⚠️ Nano Banana skipped.")
 
     if not success:
-        print("   🎨 Attempting Pollinations...")
         try:
             encoded = urllib.parse.quote(state['topic'][:50])
-            url = f"https://image.pollinations.ai/prompt/{encoded}?nologo=true"
-            res = requests.get(url, timeout=15)
+            res = requests.get(f"https://image.pollinations.ai/prompt/{encoded}", timeout=15)
             if res.status_code == 200:
                 with open(img_path, "wb") as f:
                     f.write(res.content)
                 success = True
         except: pass
 
-    # File Saving Logic
+    # 2. File Saving Logic (STABLE VERSION)
     date_str = datetime.date.today().strftime("%Y-%m-%d")
     date_full = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S +0000")
-    slug = state['topic'].lower().replace(' ', '-').replace(':', '')[:50]
+    # Clean the slug for the filename
+    safe_slug = re.sub(r'[^a-z0-9-]', '', state['topic'].lower().replace(' ', '-'))[:50]
     
-    post_filename = f"{date_str}-{slug}.md"
+    post_filename = f"{date_str}-{safe_slug}.md"
     post_path = os.path.join("_posts", post_filename)
     os.makedirs("_posts", exist_ok=True)
+
+    # Building the content safely without complex f-string nesting
+    header = "---\n"
+    header += f"title: \"{state['topic']}\"\n"
+    header += f"date: {date_full}\n"
+    header += f"categories: [{state['field']}]\n"
+    header += f"tags: [{state['seo_keywords']}]\n"
+    header += f"image:\n  path: /assets/img/{img_filename}\n"
+    header += "---\n\n"
     
-    final_content = f"""---
-title: "{state['topic']}"
-date: {date_full}
-categories:
+    final_markdown = header + state['full_draft']
+    
+    with open(post_path, "w", encoding='utf-8') as f:
+        f.write(final_markdown)
+        
+    print(f"   ✅ ARTICLE SAVED: {post_path}")
+    return {"content": final_markdown, "image_url": img_filename}

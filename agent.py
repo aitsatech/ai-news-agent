@@ -54,8 +54,21 @@ def master_editor(state: AgentState):
 
 def prompt_commander(state: AgentState):
     current_section = state['outline'][state['iteration']]
+    iteration = state['iteration']
+    
+    # Context logic: Focus on news first, then deep dive to avoid repetition
+    focus = "overview and current news" if iteration == 0 else "technical deep-dive and unique implications"
+    
     print(f"👻 Writer: Drafting {current_section}...")
-    prompt = f"SECTION: {current_section}\nCONTEXT: {state['research_data']}\nCONSTRAINTS: No headers, titles, or intros."
+    prompt = f"""
+    SECTION: {current_section}
+    FOCUS: {focus}
+    CONTEXT: {state['research_data']}
+    CONSTRAINTS: 
+    - No headers, titles, or intros.
+    - DO NOT repeat facts already mentioned in general news.
+    - Start immediately with the content.
+    """
     draft = llm_alchemist.invoke(prompt).content.strip()
     return {"section_content": draft, "current_section": current_section}
 
@@ -78,19 +91,19 @@ def publishing_king(state: AgentState):
     img_path = os.path.join("assets/img", img_filename)
     os.makedirs("assets/img", exist_ok=True)
     
+    # Image Generation
     success = False
     try:
         response = client.models.generate_images(
             model='imagen-3.0-generate-001',
-            prompt=f"Futuristic tech visual: {state['topic']}",
+            prompt=f"Futuristic tech visual for {state['topic']}",
             config=types.GenerateImagesConfig(number_of_images=1)
         )
         if response.generated_images:
             with open(img_path, "wb") as f:
                 f.write(response.generated_images[0].image_bytes)
             success = True
-    except:
-        print("   ⚠️ Nano Banana skipped.")
+    except: pass
 
     if not success:
         try:
@@ -102,7 +115,7 @@ def publishing_king(state: AgentState):
                 success = True
         except: pass
 
-    # STABLE FILE SAVING
+    # File Saving
     date_str = datetime.date.today().strftime("%Y-%m-%d")
     date_full = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S +0000")
     safe_slug = re.sub(r'[^a-z0-9-]', '', state['topic'].lower().replace(' ', '-'))[:50]
@@ -149,5 +162,4 @@ workflow.add_edge("publisher", END)
 app = workflow.compile()
 
 if __name__ == "__main__":
-    # You can change the 'field' here to whatever technical niche you want
     app.invoke({"field": "Quantum Computing", "full_draft": "", "iteration": 0})

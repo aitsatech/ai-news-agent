@@ -30,8 +30,7 @@ jobs:
       - name: Install Dependencies
         run: |
           python -m pip install --upgrade pip
-          # FIX: Ensuring google-genai and pillow are installed for agent.py compatibility
-          pip install google-genai pillow langgraph langchain-groq langchain-community duckduckgo-search requests ddgs
+          pip install google-genai pillow langgraph langchain-groq langchain-community duckduckgo-search requests
 
       - name: Run Sovereign Intelligence Syndicate
         id: run_agent
@@ -44,18 +43,21 @@ jobs:
         if: success()
         run: |
           git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Action"
+          git config --local user.name "GitHub Action Bot"
           
-          # Ensure directories exist so git add doesn't fail
+          # Ensure directories exist
           mkdir -p _posts assets/img
           
-          git add _posts/*.md || true
-          git add assets/img/*.png || true
+          # Stage specific files to avoid committing junk
+          git add _posts/*.md
+          git add assets/img/*.png
           
+          # Only commit if there are actual new files/changes
           if git diff --cached --quiet; then
-            echo "No changes to commit."
+            echo "No new content generated today."
           else
-            git commit -m "🤖 Apex Daily Update: $(date +'%Y-%m-%d')"
+            # [skip ci] prevents the bot from triggering its own workflow again
+            git commit -m "🤖 AI Content Update: $(date +'%Y-%m-%d') [skip ci]"
             git push origin main
           fi
 
@@ -64,7 +66,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh workflow run pages-deploy.yml --ref main
+          # Only run this if you have a separate deployment workflow named pages-deploy.yml
+          gh workflow run pages-deploy.yml --ref main || echo "Deployment workflow not found, skipping..."
 
       - name: Notify on Failure
         if: failure()

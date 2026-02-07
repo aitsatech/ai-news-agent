@@ -9,7 +9,7 @@ from google.genai import types
 from typing import TypedDict, List
 from langgraph.graph import StateGraph, END
 from langchain_groq import ChatGroq
-from langchain_community.tools import DuckDuckGoSearchRun
+from duckduckgo_search import DDGS  # Changed: Direct import for stability
 
 # --- 1. CONFIGURATION & STATE ---
 client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
@@ -34,15 +34,16 @@ class AgentState(TypedDict):
 
 def deep_data_diviner(state: AgentState):
     print(f"🕵️ Researcher: Scouting {state['field']} breakthroughs...")
-    # Stabilized search tool initialization
-    search = DuckDuckGoSearchRun()
     query = f"latest {state['field']} breakthroughs 2026 technical news"
     
     try:
-        raw_data = search.run(query)
+        # Changed: Using DDGS context manager directly to avoid LangChain import errors
+        with DDGS() as ddgs:
+            results = [r['body'] for r in ddgs.text(query, max_results=5)]
+            raw_data = "\n".join(results)
     except Exception as e:
         print(f"⚠️ Search failed, using fallback. Error: {e}")
-        raw_data = f"Recent breakthroughs in {state['field']} focusing on scalability and efficiency."
+        raw_data = f"Recent breakthroughs in {state['field']} focusing on scalability and technical efficiency."
 
     prompt = f"Data: {raw_data}\nIdentify the single most technical niche topic. Return ONLY the title."
     topic = llm_sovereign.invoke(prompt).content.strip().replace('"', '')
@@ -81,20 +82,20 @@ def prompt_commander(state: AgentState):
     return {"section_content": draft, "current_section": current_section}
 
 def syntax_sentinel(state: AgentState):
-    """Removes H2 tags and Duplicate Titles to ensure clean Jekyll formatting."""
+    """PERMANENT SOLUTION: Removes H2 tags and Duplicate Titles."""
     content = state['section_content']
     section_title = state['current_section'].strip()
     
-    # Remove any markdown headers (#) or literal 'h2:' tags
+    # Remove any markdown headers (#) or literal 'h2:' tags produced by LLM
     clean = re.sub(r'(?i)^#+.*$', '', content, flags=re.MULTILINE)
     clean = re.sub(r'(?i)^h2:.*$', '', clean, flags=re.MULTILINE)
     
     lines = clean.split('\n')
-    # Filter out lines that repeat the title
+    # Filter out lines that repeat the title and empty lines
     filtered_lines = [l for l in lines if l.strip().lower() != section_title.lower() and l.strip()]
     
     final_body = "\n\n".join(filtered_lines)
-    # Wrap in clean H2 tags for the final draft
+    # Wrap in clean H2 tags for Jekyll
     formatted_section = f"\n\n## {section_title}\n\n{final_body}\n"
     
     return {"full_draft": state['full_draft'] + formatted_section, "iteration": state['iteration'] + 1}
@@ -108,7 +109,6 @@ def publishing_king(state: AgentState):
     os.makedirs(img_dir, exist_ok=True)
     img_path = os.path.join(img_dir, img_filename)
     
-    # Image Generation logic
     success = False
     try:
         response = client.models.generate_images(
@@ -133,7 +133,6 @@ def publishing_king(state: AgentState):
                 success = True
         except: pass
 
-    # File Saving Configuration
     date_str = datetime.date.today().strftime("%Y-%m-%d")
     date_full = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S +0000")
     safe_slug = re.sub(r'[^a-z0-9-]', '', state['topic'].lower().replace(' ', '-'))[:50]
@@ -181,5 +180,4 @@ workflow.add_edge("publisher", END)
 app = workflow.compile()
 
 if __name__ == "__main__":
-    # You can change the 'field' here to target different tech sectors
     app.invoke({"field": "Artificial Intelligence", "full_draft": "", "iteration": 0})

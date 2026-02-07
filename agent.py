@@ -120,27 +120,51 @@ def syntax_sentinel(state: AgentState):
 def publishing_king(state: AgentState):
     print("👑 Publishing King: Finalizing Omni-Channel Distribution...")
     
-    # Generate Visual
+    # 1. ROBUST IMAGE ACQUISITION
     timestamp = int(time.time())
     img_filename = f"apex-{timestamp}.png"
     img_dir = "assets/img"
     os.makedirs(img_dir, exist_ok=True)
+    img_path = os.path.join(img_dir, img_filename)
     
-    vis_prompt = f"Abstract avant-garde cinematic image for '{state['topic']}'. 10 words."
+    # Generate Visual Concept
+    vis_prompt = f"Abstract hyper-realistic concept: {state['topic'][:50]}. Cinematic lighting, 8k, futuristic."
     visual_concept = llm_alchemist.invoke(vis_prompt).content.strip().replace('"', '')
-    encoded_prompt = urllib.parse.quote(f"{visual_concept}, 8k, futuristic")
-    gen_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1280&height=720&seed={timestamp}&nologo=true"
+    encoded_prompt = urllib.parse.quote(visual_concept)
     
+    # Use 'nofeed' to ensure direct image data
+    gen_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1280&height=720&seed={timestamp}&nologo=true&nofeed=true"
+    
+    final_img_url = ""
     try:
-        img_data = requests.get(gen_url, timeout=20).content
-        with open(os.path.join(img_dir, img_filename), "wb") as f:
-            f.write(img_data)
-        final_img_url = img_filename
-    except:
-        final_img_url = ""
+        print(f"   🎨 Requesting generation for: {img_filename}...")
+        response = requests.get(gen_url, timeout=60) # Increased timeout
+        
+        if response.status_code == 200:
+            content_type = response.headers.get('content-type', '')
+            
+            # Verify the response is an actual image
+            if 'image' in content_type:
+                with open(img_path, "wb") as f:
+                    f.write(response.content)
+                
+                # Verify file size (must be > 10KB to be a valid generation)
+                if os.path.getsize(img_path) > 10000:
+                    final_img_url = img_filename
+                    print(f"   ✅ Asset Secured: {img_filename} ({os.path.getsize(img_path)//1024} KB)")
+                else:
+                    print("   ❌ Verification Failed: File size too small (likely corrupted).")
+                    if os.path.exists(img_path): os.remove(img_path)
+            else:
+                print(f"   ❌ Verification Failed: API returned {content_type} instead of image.")
+        else:
+            print(f"   ❌ API Error: Status {response.status_code}")
+            
+    except Exception as e:
+        print(f"   ⚠️ Visual Asset Failed: {e}")
 
-    # Final Polish
-    summary_prompt = f"Summarize this into 3 Prophetic Insights: {state['full_draft']}"
+    # 2. FINAL POLISH & PROPHETIC INSIGHTS
+    summary_prompt = f"Synthesize these 3 'Prophetic Insights' for 2026 based on: {state['full_draft']}"
     takeaways = llm_sovereign.invoke(summary_prompt).content.strip()
     takeaways = re.sub(r'^(Here are|Sure).*?\n', '', takeaways, flags=re.I)
     
@@ -189,6 +213,7 @@ if __name__ == "__main__":
     today_date = now.strftime("%Y-%m-%d")
     slug = re.sub(r'[^a-z0-9]', '-', final_state['topic'].lower()).strip("-")[:50]
     
+    # leading slash included; remove if your theme (like Chirpy) requires relative paths
     img_path_str = f"/assets/img/{final_state['image_url']}" if final_state['image_url'] else ""
     
     post_md = f"""---

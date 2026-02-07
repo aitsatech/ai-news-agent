@@ -30,7 +30,8 @@ jobs:
       - name: Install Dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install google-genai pillow langgraph langchain-groq langchain-community duckduckgo-search requests
+          # Added -U and explicit duckduckgo-search to fix the 'ddgs' ImportError
+          pip install -U google-genai pillow langgraph langchain-groq langchain-community requests duckduckgo-search
 
       - name: Run Sovereign Intelligence Syndicate
         id: run_agent
@@ -45,18 +46,15 @@ jobs:
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action Bot"
           
-          # Ensure directories exist
           mkdir -p _posts assets/img
           
-          # Stage specific files to avoid committing junk
-          git add _posts/*.md
-          git add assets/img/*.png
+          # Use || true to prevent the script from crashing if no files exist yet
+          git add _posts/*.md || true
+          git add assets/img/*.png || true
           
-          # Only commit if there are actual new files/changes
           if git diff --cached --quiet; then
             echo "No new content generated today."
           else
-            # [skip ci] prevents the bot from triggering its own workflow again
             git commit -m "🤖 AI Content Update: $(date +'%Y-%m-%d') [skip ci]"
             git push origin main
           fi
@@ -66,7 +64,6 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          # Only run this if you have a separate deployment workflow named pages-deploy.yml
           gh workflow run pages-deploy.yml --ref main || echo "Deployment workflow not found, skipping..."
 
       - name: Notify on Failure

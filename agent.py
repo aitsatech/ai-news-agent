@@ -110,7 +110,7 @@ def syntax_sentinel(state: AgentState):
     # Wrap in clean H2 tags for Jekyll
     formatted_section = f"\n\n## {section_title}\n\n{final_body}\n"
     
-      return {"full_draft": state["full_draft"] + formatted_section, "iteration": state["iteration"] + 1}
+    return {"full_draft": state["full_draft"] + formatted_section, "iteration": state["iteration"] + 1}
 
 
 def publishing_king(state: AgentState):
@@ -143,7 +143,7 @@ def publishing_king(state: AgentState):
             encoded = urllib.parse.quote(state["topic"][:50])
             res = requests.get(f"https://image.pollinations.ai/prompt/{encoded}", timeout=15)
             if res.status_code == 200:
-              content_type = res.headers.get("Content-Type", "").lower()
+                content_type = res.headers.get("Content-Type", "").lower()
                 if "image/webp" in content_type:
                     img_ext = "webp"
                 elif "image/jpeg" in content_type or "image/jpg" in content_type:

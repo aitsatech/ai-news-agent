@@ -127,16 +127,30 @@ def publishing_king(state: AgentState):
     success = False
     try:
         response = client.models.generate_images(
-            model="imagen-3.0-generate-001",
+            model="gemini-2.0-flash-exp-image-generation",
             prompt=f"Futuristic professional tech visual for {state['topic']}, digital art style, high resolution",
-             config=types.GenerateImagesConfig(number_of_images=1),
+            config=types.GenerateImagesConfig(number_of_images=1),
         )
         if response.generated_images:
             with open(img_path, "wb") as f:
                 f.write(response.generated_images[0].image_bytes)
             success = True
     except Exception as e:
-        print(f"⚠️ Imagen failed: {e}")
+        print(f"⚠️ Gemini Flash image generation failed: {e}")
+
+    if not success:
+        try:
+            response = client.models.generate_images(
+                model="imagen-3.0-generate-001",
+                prompt=f"Futuristic professional tech visual for {state['topic']}, digital art style, high resolution",
+                config=types.GenerateImagesConfig(number_of_images=1),
+            )
+            if response.generated_images:
+                with open(img_path, "wb") as f:
+                    f.write(response.generated_images[0].image_bytes)
+                success = True
+        except Exception as e:
+            print(f"⚠️ Imagen failed: {e}")
 
     if not success:
         try:
@@ -182,8 +196,8 @@ def publishing_king(state: AgentState):
             pass
 
     if not success:
-        print("⚠️ Unsplash fallback failed. Using default header image.")
-        img_filename = "aitsa.png"
+        print("⚠️ Unsplash fallback failed. Continuing without a header image.")
+        img_filename = None
 
     date_str = datetime.date.today().strftime("%Y-%m-%d")
     date_full = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S +0000")
@@ -192,14 +206,18 @@ def publishing_king(state: AgentState):
     post_path = os.path.join("_posts", f"{date_str}-{safe_slug}.md")
     os.makedirs("_posts", exist_ok=True)
 
+    image_block = ""
+    if img_filename:
+        image_block = f"""image:
+  path: /assets/img/{img_filename}
+"""
+
     header = f"""---
 title: \"{state['topic']}\"
 date: {date_full}
 categories: [{state['field']}]
 tags: [{state['seo_keywords']}]
-image:
-  path: /assets/img/{img_filename}
----
+{image_block}---
 
 """
     final_markdown = header + state["full_draft"]

@@ -16,7 +16,7 @@ theme_mode: dark
 # --- AUTHOR & BRANDING ---
 author:
   name: Aitsa
-  avatar: "/assets/img/aitsa.png"
+  avatar: "/assets/img/avatar.png"
   github: aitsatech
 
 # --- IMAGE SETTINGS ---

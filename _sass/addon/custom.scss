@@ -1,0 +1,34 @@
+#avatar {
+  background-image: url("/ai-news-agent/assets/img/avatar.png");
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: cover;
+}
+
+.home-hero {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 1.25rem;
+  padding: 2.5rem;
+  background: radial-gradient(circle at top, rgba(120, 94, 255, 0.15), rgba(12, 12, 20, 0));
+}
+
+.home-hero .btn {
+  border-radius: 999px;
+}
+
+.home-feature-card {
+  border-radius: 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(12, 12, 20, 0.6);
+}
+
+.home-feature-card .badge {
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.home-metrics {
+  border-radius: 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(12, 12, 20, 0.4);
+}

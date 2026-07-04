@@ -1,10 +1,8 @@
 name: Daily AI Agent Content Generator
-
 on:
   schedule:
     - cron: '15 5 * * *'
   workflow_dispatch:
-
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
@@ -20,13 +18,11 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.10'
           # Removed pip cache temporarily to ensure clean package installs
-
       - name: Install Dependencies
         run: |
           python -m pip install --upgrade pip
@@ -34,25 +30,25 @@ jobs:
           pip uninstall -y duckduckgo-search ddgs || true
           pip install -U duckduckgo-search ddgs
           pip install google-genai pillow langgraph langchain-groq langchain-community requests
-
       - name: Run Sovereign Intelligence Syndicate
         id: run_agent
         env:
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: python agent.py
-
       - name: Commit and Push
         if: success()
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action Bot"
-          
+
           mkdir -p _posts assets/img
-          
+
           git add _posts/*.md || true
-          git add assets/img/*.png || true
-          
+          # Stage the whole directory, not just *.png -- Pollinations/Picsum
+          # fallbacks commonly save .jpg or .webp, which *.png silently missed.
+          git add assets/img/ || true
+
           if git diff --cached --quiet; then
             echo "No new content generated today."
           else
@@ -61,14 +57,12 @@ jobs:
             git pull --rebase origin main
             git push origin main
           fi
-
       - name: Trigger Website Deployment
         if: success()
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh workflow run pages-deploy.yml --ref main || echo "Deployment workflow not found, skipping..."
-
       - name: Notify on Failure
         if: failure()
         env:

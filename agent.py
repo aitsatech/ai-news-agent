@@ -51,11 +51,28 @@ BAD_TOPIC_MARKERS = [
     "not enough information",
 ]
 
+# Fixed tag taxonomy. The LLM must choose FROM this list rather than invent
+# new phrasing every run -- otherwise the tag cloud fragments into near-dupes
+# like "Transformers" / "Transformers multimodal learning" / "diffusion models"
+# vs "Diffusion Models".
+TAG_TAXONOMY = [
+    "llm", "transformers", "generative-ai", "diffusion-models", "computer-vision",
+    "reinforcement-learning", "ai-agents", "agentic-ai", "robotics", "ai-safety",
+    "open-source", "ai-hardware", "multimodal-ai", "edge-ai", "healthcare-ai",
+    "nlp", "fine-tuning", "rag", "mlops", "ai-ethics", "benchmarks", "research",
+]
+
+
+class Source(TypedDict):
+    title: str
+    url: str
+
 
 class AgentState(TypedDict):
     field: str
     topic: str
     research_data: str
+    sources: List[Source]
     outline: List[str]
     current_section: str
     section_content: str
@@ -113,12 +130,21 @@ def deep_data_diviner(state: AgentState):
     print(f"🕵️ Researcher: Scouting {subfield} breakthroughs...")
     query = f"latest {subfield} breakthroughs {current_year} research releases funding open-source models"
 
+    sources: List[Source] = []
     try:
         with DDGS() as ddgs:
-            results = [r["body"] for r in ddgs.text(query, max_results=5)]
+            raw_results = list(ddgs.text(query, max_results=5))
+            results = [r.get("body", "") for r in raw_results]
             raw_data = "\n".join(results).strip()
             if not raw_data:
                 raise ValueError("DDGS returned no results")
+            for r in raw_results:
+                # duckduckgo_search/ddgs have used different key names across
+                # versions ("href" vs "url") -- check both.
+                url = r.get("href") or r.get("url") or ""
+                title = r.get("title") or url
+                if url:
+                    sources.append({"title": title.strip(), "url": url.strip()})
     except Exception as e:
         print(f"⚠️ Search failed, using fallback. Error: {e}")
         raw_data = (
@@ -126,6 +152,7 @@ def deep_data_diviner(state: AgentState):
             f"agentic workflows, and compute-efficient architectures from the last 90 days. "
             f"(fallback context, day {day_index})"
         )
+        sources = []  # no real sources to cite this run
 
     past_titles = _load_past_titles()
     exclusion_text = ""
@@ -163,13 +190,36 @@ def deep_data_diviner(state: AgentState):
         topic = f"{subfield.title()}: Weekly Developments Roundup ({datetime.date.today().isoformat()})"
         print(f"⚠️ Falling back to guaranteed-unique topic: {topic}")
 
-    return {"topic": topic, "research_data": raw_data, "field": subfield}
+    return {"topic": topic, "research_data": raw_data, "field": subfield, "sources": sources}
 
 
 def seo_apex_strategist(state: AgentState):
-    prompt = f"Provide 5 SEO keywords for '{state['topic']}'. Comma-separated ONLY."
-    keywords = llm_alchemist.invoke(prompt).content.strip()
-    return {"seo_keywords": keywords}
+    taxonomy_str = ", ".join(TAG_TAXONOMY)
+    prompt = (
+        f"Topic: {state['topic']}\n"
+        f"Choose the 3 to 5 MOST relevant tags for this topic, selecting ONLY "
+        f"from this fixed list -- do not invent new tags or rephrase them:\n"
+        f"{taxonomy_str}\n"
+        "Return them comma-separated, lowercase, spelled EXACTLY as in the list. "
+        "Nothing else."
+    )
+    raw = llm_alchemist.invoke(prompt).content.strip()
+    candidates = [t.strip().lower() for t in raw.split(",")]
+    valid = [t for t in candidates if t in TAG_TAXONOMY]
+
+    seen = set()
+    tags: List[str] = []
+    for t in valid:
+        if t not in seen:
+            seen.add(t)
+            tags.append(t)
+
+    if not tags:
+        # Fallback: derive a tag from the field/subfield itself.
+        fallback_tag = re.sub(r"[^a-z0-9]+", "-", state["field"].lower()).strip("-")
+        tags = [fallback_tag] if fallback_tag in TAG_TAXONOMY else ["research"]
+
+    return {"seo_keywords": ", ".join(tags)}
 
 
 def master_editor(state: AgentState):
@@ -371,7 +421,24 @@ def publishing_king(state: AgentState):
         image_block = f"""image:\n  path: /assets/img/{img_filename}\n"""
 
     header = f"""---\ntitle: \"{state['topic']}\"\ndate: {date_full}\ncategories: [{state['field']}]\ntags: [{state['seo_keywords']}]\n{image_block}---\n\n"""
-    final_markdown = header + state["full_draft"]
+
+    disclosure = (
+        "> *This article was independently researched and written by an "
+        "autonomous AI agent.*\n\n"
+    )
+
+    sources = state.get("sources") or []
+    if sources:
+        source_lines = "\n".join(f"- [{s['title']}]({s['url']})" for s in sources)
+        sources_section = f"\n\n## Sources\n\n{source_lines}\n"
+    else:
+        sources_section = (
+            "\n\n## Sources\n\n"
+            "_No external sources were retrievable for this run "
+            "(search was unavailable); this article reflects general model knowledge._\n"
+        )
+
+    final_markdown = header + disclosure + state["full_draft"] + sources_section
 
     with open(post_path, "w", encoding="utf-8") as f:
         f.write(final_markdown)

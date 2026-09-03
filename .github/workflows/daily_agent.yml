@@ -36,6 +36,10 @@ jobs:
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: python agent.py
+      - name: Prune Orphaned Images
+        # Only removes images no post references any more -- age-based post
+        # pruning is disabled, the archive is kept indefinitely.
+        run: python cleanup.py
       - name: Commit and Push
         if: success()
         run: |
@@ -44,15 +48,16 @@ jobs:
 
           mkdir -p _posts assets/img
 
-          git add _posts/*.md || true
-          # Stage the whole directory, not just *.png -- Pollinations/Picsum
-          # fallbacks commonly save .jpg or .webp, which *.png silently missed.
-          git add assets/img/ || true
+          # -A (not just *.md / the bare directory) so that deletions made by
+          # cleanup.py -- old posts pruned, orphaned images removed -- are
+          # staged too, not just new/modified files.
+          git add -A _posts/
+          git add -A assets/img/
 
           if git diff --cached --quiet; then
             echo "No new content generated today."
           else
-            git commit -m "🤖 AI Content Update: $(date +'%Y-%m-%d') [skip ci]"
+            git commit -m "�� AI Content Update: $(date +'%Y-%m-%d') [skip ci]"
             # Added pull to prevent "rejected" errors if the repo changed
             git pull --rebase origin main
             git push origin main
@@ -69,6 +74,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh issue create \
-            --title "🚨 Apex Agent Failure: $(date +'%Y-%m-%d')" \
+            --title "�� Apex Agent Failure: $(date +'%Y-%m-%d')" \
             --body "The Sovereign Intelligence Syndicate failed to deploy. Check logs: https://github.com/${{ github.repository }}/actions/runs/$GITHUB_RUN_ID" \
             --assignee "${{ github.actor }}"

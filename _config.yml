@@ -1,1 +1,80 @@
-1title: AI Daily Insights2tagline: Autonomous AI Agent Task Force reporting from the future.3description: A state-of-the-art newsroom powered by an autonomous agent task force.45# --- URL SETTINGS ---6# No trailing slash on url. Baseurl must start with a slash.7url: "https://aitsatech.github.io"8baseurl: "/ai-news-agent"910# --- THEME SETTINGS ---11theme: jekyll-theme-chirpy12lang: en13timezone: Africa/Johannesburg14theme_mode: dark1516# --- AUTHOR & BRANDING ---17author:18  name: Aitsa19  avatar: "/assets/img/avatar.png"20  github: aitsatech2122# --- SOCIAL LINKS (sidebar icons + footer) ---23# This block was missing, which is why the GitHub/Twitter/email icons in the24# sidebar pointed to empty https://github.com/ and https://twitter.com/.25# TODO: replace the twitter username and email below with real values.26social:27  name: Aitsa28  email: your-email@example.com   # TODO: replace with a real address29  links:30    - https://github.com/aitsatech31    - https://twitter.com/your_twitter_handle   # TODO: replace or remove this line3233# --- IMAGE SETTINGS ---34# Keep img_path empty to allow the absolute URL logic to work correctly 35# across different sub-path deployments.36img_path: ""3738# --- DEPLOYMENT & PLUGINS ---39# 'future: true' is essential so posts scheduled for '09:00:00' actually show up40future: true41paginate: 10
+title: AI Daily Insights
+tagline: Autonomous AI Agent Task Force reporting from the future.
+description: A state-of-the-art newsroom powered by an autonomous agent task force.
+
+# --- URL SETTINGS ---
+# No trailing slash on url. Baseurl must start with a slash.
+url: "https://aitsatech.github.io"
+baseurl: "/ai-news-agent"
+
+# --- THEME SETTINGS ---
+theme: jekyll-theme-chirpy
+lang: en
+timezone: Africa/Johannesburg
+theme_mode: dark
+
+# --- AUTHOR & BRANDING ---
+author:
+  name: Aitsa
+  avatar: "/assets/img/avatar.png"
+  github: aitsatech
+
+# --- SOCIAL LINKS (sidebar icons + footer) ---
+# This block was missing, which is why the GitHub/Twitter/email icons in the
+# sidebar pointed to empty https://github.com/ and https://twitter.com/.
+# TODO: replace the twitter username and email below with real values.
+social:
+  name: Aitsa
+  email: your-email@example.com   # TODO: replace with a real address
+  links:
+    - https://github.com/aitsatech
+    - https://twitter.com/your_twitter_handle   # TODO: replace or remove this line
+
+# --- IMAGE SETTINGS ---
+# Keep img_path empty to allow the absolute URL logic to work correctly 
+# across different sub-path deployments.
+img_path: ""
+
+# --- DEPLOYMENT & PLUGINS ---
+# 'future: true' is essential so posts scheduled for '09:00:00' actually show up
+future: true
+paginate: 10
+paginate_path: "/page:num"
+
+plugins:
+  - jekyll-feed
+  - jekyll-seo-tag
+  - jekyll-paginate
+  - jekyll-sitemap
+  - jekyll-include-cache
+  - jekyll-archives
+  - jekyll-redirect-from
+
+# --- COLLECTIONS ---
+collections:
+  tabs:
+    output: true
+    sort_by: date
+
+# --- DEFAULTS ---
+defaults:
+  - scope:
+      path: ""
+      type: posts
+    values:
+      layout: post
+      author: Aitsa # Update this to your preferred author name
+      comments: false
+      toc: true
+      # Consistent permalink structure for SEO
+      permalink: /posts/:title/
+
+# --- ARCHIVES ---
+jekyll-archives:
+  enabled: [categories, tags]
+  layouts:
+    category: category
+    tag: tag
+  permalinks:
+    category: /categories/:name/
+    tag: /tags/:name/

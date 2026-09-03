@@ -108,11 +108,8 @@ def clean_old_assets(img_dir="assets/img", posts_dir="_posts", days_to_keep=7):
 
 
 if __name__ == "__main__":
-    # 1. Clean the text posts first (keep 30 days)
-    clean_old_posts(days_to_keep=30)
-
-    print("-" * 30)
-
-    # 2. Clean unreferenced images (keep 7 days) -- run AFTER post cleanup
-    #    so _referenced_images() reflects the posts that actually survived.
+    # Age-based post pruning (clean_old_posts) is intentionally NOT called
+    # here -- the archive is kept indefinitely. Only orphaned images (ones no
+    # post references any more) get cleaned up; any image still referenced
+    # by a live post is protected regardless of its age.
     clean_old_assets(days_to_keep=7)

@@ -6,6 +6,7 @@ import random
 import difflib
 import datetime
 import urllib.parse
+import xml.etree.ElementTree as ET
 
 import requests
 from google import genai
@@ -18,6 +19,12 @@ from duckduckgo_search import DDGS  # Direct import for stability
 # --- 1. CONFIGURATION & STATE ---
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 client = genai.Client(api_key=GEMINI_API_KEY) if GEMINI_API_KEY else None
+
+# imagen-3.0-generate-001 requires a billing-enabled Gemini key. On a free-tier
+# key every call fails, which just burns time before falling through to
+# Pollinations/Picsum anyway. Default OFF; flip to "true" once billing is
+# confirmed enabled on the key in GEMINI_API_KEY.
+ENABLE_GEMINI_IMAGEN = os.environ.get("ENABLE_GEMINI_IMAGEN", "false").lower() == "true"
 
 # Groq deprecates/shuts down models periodically (llama-3.3-70b-versatile and
 # llama-3.1-8b-instant were both retired on 2026-08-16). Model IDs are
@@ -78,6 +85,7 @@ class Source(TypedDict):
 class AgentState(TypedDict):
     field: str
     topic: str
+    final_title: str
     research_data: str
     sources: List[Source]
     outline: List[str]
@@ -125,7 +133,88 @@ def _is_bad_topic(topic: str) -> bool:
     return any(marker in lowered for marker in BAD_TOPIC_MARKERS)
 
 
-# --- 3. NODES ---
+def _dedupe_sources(sources: List[Source]) -> List[Source]:
+    seen = set()
+    out: List[Source] = []
+    for s in sources:
+        url = s.get("url", "")
+        if url and url not in seen:
+            seen.add(url)
+            out.append(s)
+    return out
+
+
+# --- 3. HELPERS: MULTI-SOURCE WIRE DESK ---
+# All three are free, keyless APIs. Each is independently guarded so one
+# dead source never takes down the research step -- it just contributes
+# less that day.
+
+def _fetch_arxiv(query: str, max_results: int = 3) -> List[Source]:
+    results: List[Source] = []
+    try:
+        url = (
+            "http://export.arxiv.org/api/query"
+            f"?search_query=all:{urllib.parse.quote(query)}"
+            f"&sortBy=submittedDate&sortOrder=descending&max_results={max_results}"
+        )
+        res = requests.get(url, timeout=15)
+        res.raise_for_status()
+        root = ET.fromstring(res.content)
+        ns = {"atom": "http://www.w3.org/2005/Atom"}
+        for entry in root.findall("atom:entry", ns):
+            title_el = entry.find("atom:title", ns)
+            id_el = entry.find("atom:id", ns)
+            title = (title_el.text or "").strip().replace("\n", " ") if title_el is not None else ""
+            link = (id_el.text or "").strip() if id_el is not None else ""
+            if title and link:
+                results.append({"title": title, "url": link})
+    except Exception as e:
+        print(f"⚠️ arXiv fetch failed: {e}")
+    return results
+
+
+def _fetch_hn(query: str, max_results: int = 3) -> List[Source]:
+    results: List[Source] = []
+    try:
+        url = (
+            "https://hn.algolia.com/api/v1/search"
+            f"?query={urllib.parse.quote(query)}&tags=story&hitsPerPage={max_results}"
+        )
+        res = requests.get(url, timeout=15)
+        res.raise_for_status()
+        for hit in res.json().get("hits", []):
+            title = (hit.get("title") or "").strip()
+            link = hit.get("url") or f"https://news.ycombinator.com/item?id={hit.get('objectID')}"
+            if title:
+                results.append({"title": title, "url": link})
+    except Exception as e:
+        print(f"⚠️ Hacker News fetch failed: {e}")
+    return results
+
+
+def _fetch_github_trending(query: str, max_results: int = 3) -> List[Source]:
+    results: List[Source] = []
+    try:
+        since = (datetime.date.today() - datetime.timedelta(days=30)).isoformat()
+        q = f"{query} created:>{since}"
+        url = (
+            "https://api.github.com/search/repositories"
+            f"?q={urllib.parse.quote(q)}&sort=stars&order=desc&per_page={max_results}"
+        )
+        res = requests.get(url, timeout=15, headers={"Accept": "application/vnd.github+json"})
+        res.raise_for_status()
+        for item in res.json().get("items", []):
+            name = item.get("full_name")
+            link = item.get("html_url")
+            desc = (item.get("description") or "")[:80]
+            if name and link:
+                results.append({"title": f"{name} — {desc}".strip(" —"), "url": link})
+    except Exception as e:
+        print(f"⚠️ GitHub trending fetch failed: {e}")
+    return results
+
+
+# --- 4. NODES ---
 
 def deep_data_diviner(state: AgentState):
     # Rotate the subfield deterministically by day so repeated failed
@@ -160,6 +249,19 @@ def deep_data_diviner(state: AgentState):
             f"(fallback context, day {day_index})"
         )
         sources = []  # no real sources to cite this run
+
+    # Wire desk: pull from arXiv, Hacker News, and GitHub Trending regardless
+    # of whether DDGS succeeded. This diversifies sourcing and means the
+    # sources list is almost never empty, even on a DDGS outage day.
+    print("📡 Wire Desk: Pulling arXiv, Hacker News, and GitHub Trending...")
+    wire_sources: List[Source] = []
+    wire_sources += _fetch_arxiv(subfield)
+    wire_sources += _fetch_hn(subfield)
+    wire_sources += _fetch_github_trending(subfield)
+
+    if wire_sources:
+        raw_data += "\n" + "\n".join(s["title"] for s in wire_sources)
+    sources = _dedupe_sources(sources + wire_sources)
 
     past_titles = _load_past_titles()
     exclusion_text = ""
@@ -279,6 +381,70 @@ def syntax_sentinel(state: AgentState):
     return {"full_draft": state["full_draft"] + formatted_section, "iteration": state["iteration"] + 1}
 
 
+def fact_checker(state: AgentState):
+    """
+    Autonomous quality gate: cross-references the assembled draft against the
+    research data actually gathered this run, and rewrites out any specific
+    claim (stat, date, named result) that isn't backed by it. Runs with no
+    human in the loop, so it self-corrects rather than flagging for review.
+    """
+    print("🔍 Fact-Checker: Cross-referencing article against source data...")
+    prompt = (
+        "You are a fact-checking editor for a technical AI news publication. "
+        "Below is a draft article and the research data it should be grounded in.\n\n"
+        "Rewrite the draft so that every specific claim (statistic, date, named "
+        "product/company result, benchmark number, quote) is either supported by "
+        "the research data or rephrased into general, defensible technical "
+        "context. Do not add new specific claims that aren't in the research "
+        "data. Preserve the '## Section Title' headers exactly as they appear. "
+        "Keep the technical depth and length roughly the same. "
+        "Return ONLY the corrected article text, nothing else -- no preamble, "
+        "no notes about what you changed.\n\n"
+        f"RESEARCH DATA:\n{state['research_data']}\n\n"
+        f"DRAFT ARTICLE:\n{state['full_draft']}"
+    )
+    checked = llm_sovereign.invoke(prompt).content.strip()
+
+    # Sanity guard: if the model returned something degenerate (empty, or a
+    # refusal/meta-comment instead of an article), keep the original draft
+    # rather than publishing garbage.
+    if len(checked) < 200 or "## " not in checked:
+        print("⚠️ Fact-checker output failed sanity check; keeping original draft.")
+        return {}
+
+    return {"full_draft": checked}
+
+
+def headline_optimizer(state: AgentState):
+    """Generates and scores headline variants; picks a winner for the front matter title."""
+    print("📰 Headline Desk: Generating and scoring title variants...")
+    gen_prompt = (
+        f"Original working title: {state['topic']}\n"
+        f"Article opening context: {state['full_draft'][:600]}\n\n"
+        "Generate exactly 3 alternative headline options for this article, each "
+        "on its own line, no numbering, no quotes. Headlines must be specific, "
+        "factual, and under 90 characters -- no sensationalism or clickbait."
+    )
+    raw = llm_alchemist.invoke(gen_prompt).content.strip()
+    candidates = [l.strip().strip('"') for l in raw.split("\n") if l.strip()]
+    candidates = [c for c in candidates if 10 < len(c) < 100][:3]
+
+    if not candidates:
+        return {"final_title": state["topic"]}
+
+    score_prompt = (
+        "Below are candidate headlines for a technical AI news article. Pick "
+        "the ONE that is most specific, clear, and click-worthy WITHOUT being "
+        "sensational or misleading. Return ONLY the exact text of the winning "
+        "headline, nothing else.\n\n" + "\n".join(f"- {c}" for c in candidates)
+    )
+    winner = llm_sovereign.invoke(score_prompt).content.strip().strip('"')
+    if winner not in candidates:
+        winner = candidates[0]
+
+    return {"final_title": winner}
+
+
 def _detect_image_extension(content_type: str) -> str:
     content_type = content_type.lower()
     if "image/webp" in content_type:
@@ -299,8 +465,11 @@ def _try_gemini_imagen(prompt: str, img_path: str) -> bool:
     """
     Only imagen-3.0-generate-001 actually supports client.models.generate_images().
     This requires a billing-enabled key; on a free-tier key it will fail, which
-    is fine -- we just fall through to the next option.
+    is fine -- we just fall through to the next option. Gated behind
+    ENABLE_GEMINI_IMAGEN so a known-free-tier key doesn't burn a call every run.
     """
+    if not ENABLE_GEMINI_IMAGEN:
+        return False
     if not client:
         print("⚠️ GEMINI_API_KEY not set. Skipping Gemini image generation.")
         return False
@@ -387,13 +556,15 @@ def _try_picsum(img_basename: str, img_dir: str, seed: int) -> Optional[str]:
 def publishing_king(state: AgentState):
     print("👑 Publisher: Finalizing and Saving...")
 
+    display_title = state.get("final_title") or state["topic"]
+
     timestamp = int(time.time())
     img_basename = f"apex-{timestamp}"
     img_dir = "assets/img"
     os.makedirs(img_dir, exist_ok=True)
 
     prompt = (
-        f"Futuristic professional tech visual for {state['topic']}, "
+        f"Futuristic professional tech visual for {display_title}, "
         "digital art style, high resolution"
     )
 
@@ -404,7 +575,7 @@ def publishing_king(state: AgentState):
         img_filename = os.path.basename(img_path)
 
     if not img_filename:
-        img_filename = _try_pollinations(state["topic"], img_basename, img_dir, timestamp)
+        img_filename = _try_pollinations(display_title, img_basename, img_dir, timestamp)
 
     if not img_filename:
         print("⚠️ Pollinations failed. Falling back to Picsum placeholder image.")
@@ -415,7 +586,7 @@ def publishing_king(state: AgentState):
 
     date_str = datetime.date.today().strftime("%Y-%m-%d")
     date_full = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S +0000")
-    safe_slug = re.sub(r"[^a-z0-9-]", "", state["topic"].lower().replace(" ", "-"))[:50]
+    safe_slug = re.sub(r"[^a-z0-9-]", "", display_title.lower().replace(" ", "-"))[:50]
     # Guard against slug collisions on the rare chance two runs land on a
     # near-identical slug the same day.
     safe_slug = f"{safe_slug}-{timestamp % 10000}"
@@ -427,7 +598,7 @@ def publishing_king(state: AgentState):
     if img_filename:
         image_block = f"""image:\n  path: /assets/img/{img_filename}\n"""
 
-    header = f"""---\ntitle: \"{state['topic']}\"\ndate: {date_full}\ncategories: [{state['field']}]\ntags: [{state['seo_keywords']}]\n{image_block}---\n\n"""
+    header = f"""---\ntitle: \"{display_title}\"\ndate: {date_full}\ncategories: [{state['field']}]\ntags: [{state['seo_keywords']}]\n{image_block}---\n\n"""
 
     disclosure = (
         "> *This article was independently researched and written by an "
@@ -456,7 +627,7 @@ def publishing_king(state: AgentState):
     return {"content": final_markdown, "image_url": img_filename or ""}
 
 
-# --- 4. GRAPH & RUNTIME ---
+# --- 5. GRAPH & RUNTIME ---
 
 def router(state: AgentState):
     return "finalize" if state["iteration"] >= len(state["outline"]) else "next"
@@ -468,6 +639,8 @@ workflow.add_node("seo", seo_apex_strategist)
 workflow.add_node("editor", master_editor)
 workflow.add_node("writer", prompt_commander)
 workflow.add_node("auditor", syntax_sentinel)
+workflow.add_node("fact_checker", fact_checker)
+workflow.add_node("headline_optimizer", headline_optimizer)
 workflow.add_node("publisher", publishing_king)
 
 workflow.set_entry_point("researcher")
@@ -475,7 +648,9 @@ workflow.add_edge("researcher", "seo")
 workflow.add_edge("seo", "editor")
 workflow.add_edge("editor", "writer")
 workflow.add_edge("writer", "auditor")
-workflow.add_conditional_edges("auditor", router, {"next": "writer", "finalize": "publisher"})
+workflow.add_conditional_edges("auditor", router, {"next": "writer", "finalize": "fact_checker"})
+workflow.add_edge("fact_checker", "headline_optimizer")
+workflow.add_edge("headline_optimizer", "publisher")
 workflow.add_edge("publisher", END)
 app = workflow.compile()
 

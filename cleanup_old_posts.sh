@@ -5,13 +5,25 @@
 #   2) Posts that are exact/near-duplicate titles of an earlier post (keeps the earliest)
 #   3) The header image referenced by each removed post (if present)
 #
-# It stages the deletions with `git rm` and creates ONE commit. Review with
-# `git show --stat` before pushing.
+# It stages the deletions with `git rm` and creates ONE commit.
+#
+# Usage:
+#   ./cleanup_old_posts.sh          Interactive (asks for y/N confirmation)
+#   ./cleanup_old_posts.sh --yes    Non-interactive (for CI / autonomous runs)
 
 set -euo pipefail
 
 POSTS_DIR="_posts"
 IMG_DIR="assets/img"
+AUTO_YES=false
+
+for arg in "$@"; do
+  case "$arg" in
+  --yes | -y)
+    AUTO_YES=true
+    ;;
+  esac
+done
 
 if [ ! -d "$POSTS_DIR" ]; then
   echo "❌ Can't find $POSTS_DIR — run this script from the repo root."
@@ -52,10 +64,13 @@ echo
 echo "About to delete ${#to_delete[@]} file(s):"
 printf '  %s\n' "${to_delete[@]}"
 echo
-read -r -p "Proceed with deletion + commit? [y/N] " confirm
-if [[ "$confirm" != "y" && "$confirm" != "Y" ]]; then
-  echo "Aborted. No changes made."
-  exit 1
+
+if ! $AUTO_YES; then
+  read -r -p "Proceed with deletion + commit? [y/N] " confirm
+  if [[ "$confirm" != "y" && "$confirm" != "Y" ]]; then
+    echo "Aborted. No changes made."
+    exit 1
+  fi
 fi
 
 for f in "${to_delete[@]}"; do
@@ -70,7 +85,13 @@ for f in "${to_delete[@]}"; do
   git rm -f "$f"
 done
 
-git commit -m "🧹 Clean up duplicate/junk auto-generated posts"
-echo
-echo "✅ Done. Review the commit (git show --stat HEAD), then:"
-echo "     git push origin main"
+if $AUTO_YES; then
+  # In CI this runs as part of a larger commit staged by the workflow, so
+  # just leave the deletions staged -- don't commit here.
+  echo "✅ Done (non-interactive). ${#to_delete[@]} file(s) staged for removal."
+else
+  git commit -m "🧹 Clean up duplicate/junk auto-generated posts"
+  echo
+  echo "✅ Done. Review the commit (git show --stat HEAD), then:"
+  echo "     git push origin main"
+fi

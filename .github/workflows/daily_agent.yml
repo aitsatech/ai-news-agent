@@ -51,14 +51,20 @@ jobs:
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action Bot"
+          # Prevents line-ending renormalization (per .gitattributes) from
+          # showing up as a phantom "modified" tracked file outside
+          # _posts/assets -- that's what left the tree dirty and broke the
+          # rebase pull below on the previous run.
+          git config --local core.autocrlf false
 
           mkdir -p _posts assets/img
 
-          # -A (not just *.md / the bare directory) so that deletions made by
-          # the QA sweep and cleanup.py -- junk posts, old drafts, orphaned
-          # images -- are staged too, not just new/modified files.
-          git add -A _posts/
-          git add -A assets/img/
+          # Stage the WHOLE repo, not just _posts/assets. Scoping to those
+          # two paths was the actual bug: any tracked file touched outside
+          # them (even incidentally, e.g. by renormalization) stayed
+          # unstaged, and `git pull --rebase` refuses to run with an unstaged
+          # tracked-file change anywhere in the tree.
+          git add -A
 
           if git diff --cached --quiet; then
             echo "No new content generated today."

@@ -19,9 +19,16 @@ from duckduckgo_search import DDGS  # Direct import for stability
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 client = genai.Client(api_key=GEMINI_API_KEY) if GEMINI_API_KEY else None
 
+# Groq deprecates/shuts down models periodically (llama-3.3-70b-versatile and
+# llama-3.1-8b-instant were both retired on 2026-08-16). Model IDs are
+# env-var-configurable so the next deprecation cycle is a one-line change
+# instead of a code edit -- see console.groq.com/docs/deprecations.
+SOVEREIGN_MODEL = os.environ.get("GROQ_SOVEREIGN_MODEL", "openai/gpt-oss-120b")
+ALCHEMIST_MODEL = os.environ.get("GROQ_ALCHEMIST_MODEL", "openai/gpt-oss-20b")
+
 # Slightly higher temperature so topic selection isn't near-deterministic
-llm_sovereign = ChatGroq(model_name="llama-3.3-70b-versatile", temperature=0.4)
-llm_alchemist = ChatGroq(model_name="llama-3.1-8b-instant", temperature=0.5)
+llm_sovereign = ChatGroq(model_name=SOVEREIGN_MODEL, temperature=0.4)
+llm_alchemist = ChatGroq(model_name=ALCHEMIST_MODEL, temperature=0.5)
 
 # Rotating subfields so the search query (and therefore the topic) varies
 # even on days when web search fails and we fall back to canned context.
